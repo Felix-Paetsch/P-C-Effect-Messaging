@@ -1,13 +1,15 @@
-import { Data, Effect, Equal } from "effect";
+import { Data, Effect, Equal, Option } from "effect";
 import { MessageT, SerializedMessageT } from "./message";
 import { Address, AddressT } from "./address";
-import { ProcessAMessageThatTargetedCore } from "./_todo";
-import { computeLocalMessageData, coreMiddlewareEffect, LocalComputedMessageDataT, middlewareEffect } from "./middleware";
+import { ProcessAMessageThatTargetedCore } from "./listen";
+import { coreMiddlewareEffect, middlewareEffect } from "./middleware";
 import { findAllOutCommunicationChannels, tryCommunicationChannels } from "./communication_channels";
+import { LocalComputedMessageDataT, sendLocalComputedMessageData } from "./local_computed_message_data";
 
 class AddressNotFoundError extends Data.TaggedError("AddressNotFoundError")<{
     address: Address;
 }> { }
+
 export const send = Effect.gen(function* (_) {
     const { msg } = yield* _(MessageT);
     const { address } = yield* _(AddressT);
@@ -36,7 +38,7 @@ export const send = Effect.gen(function* (_) {
 }).pipe(
     Effect.provideServiceEffect(
         LocalComputedMessageDataT,
-        computeLocalMessageData
+        sendLocalComputedMessageData
     ),
     Effect.provideServiceEffect(
         AddressT,

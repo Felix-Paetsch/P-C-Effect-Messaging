@@ -2,7 +2,7 @@ import { Data, Effect, Equal, Context } from "effect";
 import { AddressT, Address } from "./address";
 import { SerializedMessageT, SerializedMessage } from "./message";
 import { endpoints, findOrCreateEndpoint } from "./endpoints";
-import { ProcessAMessageThatWasRecievedAndThrew } from "./_todo";
+import { ProcessAMessageThatWasRecievedAndThrew } from "./listen";
 import { recieve, RecieveAddressT } from "./recieve";
 
 type InCommunicationChannel = {
@@ -100,38 +100,67 @@ export const tryCommunicationChannels =
 
 export class CommunicatorNotFoundError extends Data.TaggedError("CommunicatorNotFoundError")<{}> { }
 
+const removeChannelEffect = (communicationChannel: CommunicationChannel) =>
+    Effect.gen(function* (_) {
+        for (const endpoint of endpoints) {
+            if (Equal.equals(endpoint.address, endpoint.address)) {
+                const prev_length = endpoint.communicationChannels.length;
+                endpoint.communicationChannels = endpoint.communicationChannels.filter(c => c != communicationChannel);
+                if (prev_length == endpoint.communicationChannels.length) {
+                    return yield* _(Effect.fail(new CommunicatorNotFoundError()));
+                }
+                return yield* _(Effect.never);
+            }
+        }
+
+        return yield* _(Effect.fail(new CommunicatorNotFoundError()));
+    })
+
+export class RegisterChannelCallbackError extends Data.TaggedError("RegisterChannelError")<{
+    err: Error;
+}> { }
+
 export const registerCommunicationChannel = Effect.gen(function* (_) {
     const { address } = yield* _(AddressT);
     const { communicationChannel } = yield* _(CommunicationChannelT);
 
     const endpoint = findOrCreateEndpoint(address);
     endpoint.communicationChannels.push(communicationChannel);
-    if (communicationChannel.direction == "IN" || communicationChannel.direction == "INOUT") {
-        (communicationChannel as InCommunicationChannel).recieve_cb(
-            Effect.provideService(recieve, RecieveAddressT, { address: address }).pipe(
-                Effect.catchAll(e => {
-                    return ProcessAMessageThatWasRecievedAndThrew
-                }),
-                Effect.andThen(Effect.never)
+
+    const remove_effect = removeChannelEffect(communicationChannel);
+    yield* Effect.try(() => {
+        return communicationChannel.remove_cb(remove_effect)
+    }).pipe(Effect.catchAll(e => {
+        const err = e instanceof Error ? e : new Error("Couldn't register remove callback");
+        return remove_effect.pipe(
+            Effect.andThen(Effect.fail(new RegisterChannelCallbackError({ err }))),
+            Effect.catchTag(
+                "CommunicatorNotFoundError",
+                () => Effect.never // If it is not there for some reason, we are good
             )
         )
+    }));
 
-        communicationChannel.remove_cb(
-            Effect.gen(function* (_) {
-                for (const endpoint of endpoints) {
-                    if (Equal.equals(endpoint.address, endpoint.address)) {
-                        const prev_length = endpoint.communicationChannels.length;
-                        endpoint.communicationChannels = endpoint.communicationChannels.filter(c => c != communicationChannel);
-                        if (prev_length == endpoint.communicationChannels.length) {
-                            return yield* _(Effect.fail(new CommunicatorNotFoundError()));
-                        }
-                        return yield* _(Effect.never);
-                    }
-                }
-
-                return yield* _(Effect.fail(new CommunicatorNotFoundError()));
-            })
-        )
+    if (communicationChannel.direction == "IN" || communicationChannel.direction == "INOUT") {
+        yield* Effect.try(() => {
+            return (communicationChannel as InCommunicationChannel).recieve_cb(
+                Effect.provideService(recieve, RecieveAddressT, { address: address }).pipe(
+                    Effect.catchAll(e => {
+                        return ProcessAMessageThatWasRecievedAndThrew
+                    }),
+                    Effect.andThen(Effect.never)
+                )
+            )
+        }).pipe(Effect.catchAll(e => {
+            const err = e instanceof Error ? e : new Error("Couldn't register remove callback");
+            return remove_effect.pipe(
+                Effect.andThen(Effect.fail(new RegisterChannelCallbackError({ err }))),
+                Effect.catchTag(
+                    "CommunicatorNotFoundError",
+                    () => Effect.never // If it is not there for some reason, we are good
+                )
+            )
+        }));
     }
 
     return yield* _(Effect.never);
