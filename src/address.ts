@@ -1,14 +1,17 @@
 import uuidv4, { UUID } from "./utils/uuid";
 import { Data, Effect, ParseResult, Schema, Equal, Hash, Context } from "effect";
 
-export class AddressDeserializationError extends Data.TaggedError("AddressDeserializationError")<{}> { }
+export class AddressDeserializationError extends Data.TaggedError("AddressDeserializationError")<{
+    address: string;
+}> { }
 export class AddressT extends Context.Tag("AddressT")<AddressT, {
     address: Address;
 }>() { }
 
-export type SerializedAddress = `HOST_ID: ${UUID}\nPLUGIN_ID: ${UUID}` & { readonly __brand: "SerializedAddress" };
+export type SerializedAddress = `HOST_ID: ${UUID}\nPLUGIN_ID: ${UUID}`
+    & { readonly __brand: "SerializedAddress" };
 
-export default class Address implements Equal.Equal {
+export class Address implements Equal.Equal {
     constructor(
         public readonly host_id: UUID,
         public readonly plugin_id: UUID
@@ -36,7 +39,7 @@ export default class Address implements Equal.Equal {
     static deserialize(serialized: SerializedAddress): Effect.Effect<Address, AddressDeserializationError> {
         return Schema.decode(Address.AddressFromString)(serialized)
             .pipe(
-                Effect.catchTag("ParseError", () => new AddressDeserializationError())
+                Effect.catchTag("ParseError", () => new AddressDeserializationError({ address: serialized }))
             )
     }
 

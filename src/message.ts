@@ -1,24 +1,20 @@
 import { Context, Data, Effect, ParseResult, pipe, Schema } from "effect";
-import Address from "./address";
+import { Address } from "./address";
 
 export class MessageT extends Context.Tag("MessageT")<
     MessageT,
     { readonly msg: Message }
 >() { }
 
-export class MessageParseError extends Data.TaggedError("MessageParseError")<{}> { }
-
-export type LocalComputedData = {
-    local_address: Address;
-    direction: "incomming" | "outgoing";
-    is_bridge: boolean;
-}
-
-export type SerializedMessage = string & { readonly __brand: "SerializedMessage" };
 export class MessageSerializationError extends Data.TaggedError("MessageSerializationError")<{}> { }
 export class MessageDeserializationError extends Data.TaggedError("MessageDeserializationError")<{}> { }
 
-export default class Message {
+export type SerializedMessage = string & { readonly __brand: "SerializedMessage" };
+export class SerializedMessageT extends Context.Tag("SerializedMessageT")<SerializedMessageT, {
+    serialized: SerializedMessage;
+}>() { }
+
+export class Message {
     constructor(
         public readonly target: Address, // | Communicator,
         public readonly content: string,
