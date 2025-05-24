@@ -1,4 +1,4 @@
-export type UUID = string & { readonly __brand: "UUID" };
+export type UUID = string;
 
 export default function uuidv4(): UUID {
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {

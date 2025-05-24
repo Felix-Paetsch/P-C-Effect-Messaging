@@ -1,5 +1,6 @@
 import { Context, Data, Effect, ParseResult, pipe, Schema } from "effect";
 import Address from "./address";
+import { Communicator } from "./communicator";
 
 export class MessageT extends Context.Tag("MessageT")<
     MessageT,
@@ -14,31 +15,19 @@ export type LocalComputedData = {
     is_bridge: boolean;
 }
 
-export type SerializedMessage = string & { readonly __brand: "SerializedMessage" };
-export class MessageSerializationError extends Data.TaggedError("MessageSerializationError")<{}> { }
-export class MessageDeserializationError extends Data.TaggedError("MessageDeserializationError")<{}> { }
-
 export default class Message {
     constructor(
-        public readonly target: Address, // | Communicator,
+        public readonly target: Address | Communicator,
         public readonly content: string,
-        public meta_data: { [key: string]: any } = {}
+        public meta_data: { [key: string]: any } = {},
+        public computed_data: {
+            local: LocalComputedData | null,
+            [key: string]: any
+        } = {
+                local: null
+            }
     ) { }
 
-    serialize(): Effect.Effect<SerializedMessage, MessageSerializationError> {
-        return Schema.encode(Message.MessageFromString)(this)
-            .pipe(
-                Effect.map(serialized => serialized as SerializedMessage),
-                Effect.catchTag("ParseError", () => new MessageSerializationError())
-            )
-    }
-
-    static deserialize(serialized: SerializedMessage): Effect.Effect<Message, MessageDeserializationError> {
-        return Schema.decode(Message.MessageFromString)(serialized)
-            .pipe(
-                Effect.catchTag("ParseError", () => new MessageDeserializationError())
-            )
-    }
 
     static MessageFromString = Schema.transformOrFail(Schema.String, Schema.instanceOf(Message), {
         decode: (str: string, _, ast) =>
@@ -64,10 +53,11 @@ export default class Message {
                         new ParseResult.Type(ast, str, `Failed deserializing message: ${e instanceof Error ? e.message : String(e)}`));
                 })
             ),
-        encode: (msg: Message, _, ast) =>
-            pipe(
+        encode: (msg: Message, _, ast) => {
+            const target = msg.target instanceof Address ? msg.target : msg.target.get_address();
+            return pipe(
                 Effect.try(() => JSON.stringify({
-                    target: Schema.encodeSync(Address.AddressFromString)(msg.target),
+                    target: Schema.encodeSync(Address.AddressFromString)(target),
                     content: msg.content,
                     meta_data: msg.meta_data
                 })),
@@ -77,5 +67,6 @@ export default class Message {
                     );
                 })
             )
+        }
     });
 }

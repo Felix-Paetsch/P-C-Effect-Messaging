@@ -1,6 +1,6 @@
 import { Context, Effect } from "effect";
 import Address from "./address";
-import Message from "./message";
+import { MessageT } from "./message";
 import { Middleware, MiddlewareError } from "./middleware";
 
 
@@ -17,7 +17,7 @@ export interface InCommunicationProvider {
 }
 
 export interface OutCommunicationProvider {
-    readonly send: (msg: Message) => void;
+    readonly send: Effect.Effect<never, MiddlewareError, MessageT>;
     readonly register_close_cb: (on_close: () => void) => void;
 }
 
@@ -30,6 +30,11 @@ export interface ICommunicator {
     get_address(): Address;
     readonly communication_provider: CommunicationProvider;
 }
+
+export class CommunicatorT extends Context.Tag("CommunicatorT")<
+    CommunicatorT,
+    { readonly communicator: Communicator }
+>() { }
 
 type MiddlewarePosition = "MSG_IN" | "MSG_OUT" | "ALL";
 
