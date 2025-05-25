@@ -21,7 +21,6 @@ class CommunicationChannelT extends Context.Tag("CommunicationChannelT")<
     CommunicationChannelT, CommunicationChannel
 >() { }
 
-
 export type TryNextCommunicationChannelEffect =
     Effect.Effect<never, NoValidCommunicationChannelsError | MessageChannelError, SerializedMessageT | AddressT>
 export class MessageChannelError extends Data.TaggedError("MessageChannelError")<{

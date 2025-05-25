@@ -1,4 +1,4 @@
-import uuidv4, { UUID } from "./utils/uuid";
+import uuidv4, { UUID } from "./uuid";
 import { Data, Effect, ParseResult, Schema, Equal, Hash, Context } from "effect";
 
 export class AddressDeserializationError extends Data.TaggedError("AddressDeserializationError")<{

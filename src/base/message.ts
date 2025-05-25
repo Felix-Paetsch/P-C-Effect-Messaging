@@ -14,7 +14,7 @@ export class SerializedMessageT extends Context.Tag("SerializedMessageT")<Serial
 
 export class Message {
     constructor(
-        public readonly target: Address, // | Communicator,
+        public target: Address, // | Communicator,
         public readonly content: string,
         public meta_data: { [key: string]: any } = {}
     ) { }

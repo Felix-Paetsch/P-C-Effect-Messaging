@@ -7,8 +7,8 @@ import { listen, listenRecieveError } from "./listen";
 export {
     setLocalAddress,
     send,
-    listen,
-    listenRecieveError,
     registerCommunicationChannel,
-    useMiddleware
+    useMiddleware,
+    listen,
+    listenRecieveError
 }
