@@ -3,16 +3,14 @@ import { Address } from "./address";
 
 export class MessageT extends Context.Tag("MessageT")<
     MessageT,
-    { readonly msg: Message }
+    Message
 >() { }
 
 export class MessageSerializationError extends Data.TaggedError("MessageSerializationError")<{}> { }
 export class MessageDeserializationError extends Data.TaggedError("MessageDeserializationError")<{}> { }
 
 export type SerializedMessage = string & { readonly __brand: "SerializedMessage" };
-export class SerializedMessageT extends Context.Tag("SerializedMessageT")<SerializedMessageT, {
-    serialized: SerializedMessage;
-}>() { }
+export class SerializedMessageT extends Context.Tag("SerializedMessageT")<SerializedMessageT, SerializedMessage>() { }
 
 export class Message {
     constructor(

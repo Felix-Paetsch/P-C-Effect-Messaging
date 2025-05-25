@@ -1,4 +1,4 @@
-import { Effect, Context, Data, Option, Equal } from "effect";
+import { Effect, Context, Data } from "effect";
 import { Address, AddressT } from "./address";
 import { findOrCreateEndpoint } from "./endpoints";
 import { MessageT } from "./message";
@@ -43,7 +43,7 @@ export const useMiddleware = Effect.gen(function* (_) {
 
 export const middlewareEffect = (position: MiddlewarePosition) =>
     Effect.gen(function* (_) {
-        const { address } = yield* _(AddressT);
+        const address = yield* _(AddressT);
         const endpoint = findOrCreateEndpoint(address);
 
         const relevant_middleware = endpoint.middlewares.filter(
@@ -61,5 +61,5 @@ export const coreMiddlewareEffect = (position: MiddlewarePosition) =>
     Effect.provideService(
         middlewareEffect(position),
         AddressT,
-        { address: Address.local_address() }
+        Address.local_address()
     );

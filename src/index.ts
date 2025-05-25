@@ -1,11 +1,14 @@
 import { useMiddleware } from "./middleware";
 import { send } from "./send";
 import { registerCommunicationChannel } from "./communication_channels";
-import { setLocalHostId } from "./endpoints";
+import { setLocalAddress } from "./endpoints";
+import { listen, listenRecieveError } from "./listen";
 
 export {
-    setLocalHostId,
+    setLocalAddress,
     send,
+    listen,
+    listenRecieveError,
     registerCommunicationChannel,
     useMiddleware
 }
