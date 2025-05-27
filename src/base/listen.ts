@@ -8,10 +8,10 @@ export class CallbackRegistrationError extends Data.TaggedError("RegisterChannel
 
 class ListenerNotFoundError extends Data.TaggedError("ListenerNotFoundError")<{}> { }
 
-export type ListenerEffect = Effect.Effect<never, never, MessageT | LocalComputedMessageDataT>
+export type ListenerEffect = Effect.Effect<void, never, MessageT | LocalComputedMessageDataT>
 export class ListenerT extends Context.Tag("ListenerT")<ListenerT, {
     listen: ListenerEffect,
-    remove_cb?: (remove_effect: Effect.Effect<never, ListenerNotFoundError, never>) => void;
+    remove_cb?: (remove_effect: Effect.Effect<void, ListenerNotFoundError, void>) => void;
 }>() { }
 
 const registered_listeners: ListenerEffect[] = [];
@@ -22,7 +22,7 @@ const removeListenerEffect = (listener: ListenerEffect) => Effect.gen(function* 
         return yield* _(Effect.fail(new ListenerNotFoundError()));
     }
     registered_listeners.splice(index, 1);
-    return yield* Effect.never;
+    return yield* Effect.void;
 });
 
 export const listen = Effect.gen(function* (_) {
@@ -36,24 +36,24 @@ export const listen = Effect.gen(function* (_) {
             return remove_cb(remove_effect)
         }).pipe(Effect.catchAll(e => {
             const err = e instanceof Error ? e : new Error("Couldn't register remove callback");
-            return remove_effect.pipe(
-                Effect.andThen(Effect.fail(new CallbackRegistrationError({ err }))),
-                Effect.catchTag(
-                    "ListenerNotFoundError",
-                    () => Effect.never // If it is not there for some reason, we are good
-                )
-            )
+            return Effect.all([
+                remove_effect,
+                Effect.fail(new CallbackRegistrationError({ err })),
+            ]).pipe(Effect.catchTag(
+                "ListenerNotFoundError",
+                () => Effect.void // If it is not there for some reason, we are good
+            ))
         }));
     }
 
-    return yield* _(Effect.never);
+    return yield* _(Effect.void);
 });
 
 export const applyListeners = Effect.gen(function* (_) {
     for (const listener of registered_listeners) {
         yield* _(listener);
     }
-    return yield* Effect.never;
+    return yield* Effect.void;
 });
 
 // ============
@@ -68,10 +68,10 @@ export class RecieveErrorT extends Context.Tag("RecieveErrorT")<RecieveErrorT, {
     Message: Message | null;
 }>() { }
 
-export type ErrorListenEffect = Effect.Effect<never, never, RecieveErrorT>;
+export type ErrorListenEffect = Effect.Effect<void, void, RecieveErrorT>;
 export class ErrorListenerT extends Context.Tag("ErrorListenerT")<ErrorListenerT, {
     listen: ErrorListenEffect,
-    remove_cb?: (remove_effect: Effect.Effect<never, ListenerNotFoundError, never>) => void;
+    remove_cb?: (remove_effect: Effect.Effect<void, ListenerNotFoundError, void>) => void;
 }>() { }
 
 const registered_error_listeners: ErrorListenEffect[] = [];
@@ -82,7 +82,7 @@ const removeErrorListenerEffect = (listener: ErrorListenEffect) => Effect.gen(fu
         return yield* _(Effect.fail(new ListenerNotFoundError()));
     }
     registered_error_listeners.splice(index, 1);
-    return yield* Effect.never;
+    return yield* Effect.void;
 });
 
 export const listenRecieveError = Effect.gen(function* (_) {
@@ -96,24 +96,25 @@ export const listenRecieveError = Effect.gen(function* (_) {
             return remove_cb(remove_effect)
         }).pipe(Effect.catchAll(e => {
             const err = e instanceof Error ? e : new Error("Couldn't register remove callback");
-            return remove_effect.pipe(
-                Effect.andThen(Effect.fail(new CallbackRegistrationError({ err }))),
-                Effect.catchTag(
-                    "ListenerNotFoundError",
-                    () => Effect.never // If it is not there for some reason, we are good
-                )
+            return Effect.all([
+                remove_effect,
+                Effect.fail(new CallbackRegistrationError({ err })),
+            ]).pipe(Effect.catchTag(
+                "ListenerNotFoundError",
+                () => Effect.void // If it is not there for some reason, we are good
+            )
             )
         }));
     }
 
-    return yield* _(Effect.never);
+    return yield* _(Effect.void);
 });
 
 export const applyRecieveErrorListeners = (e: Error) => Effect.gen(function* (_) {
     for (const listener of registered_error_listeners) {
         yield* _(listener);
     }
-    return yield* Effect.never;
+    return yield* Effect.void;
 }).pipe(
     Effect.provideServiceEffect(RecieveErrorT, Effect.gen(function* (_) {
         const msgO = yield* Effect.serviceOption(MessageT)

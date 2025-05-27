@@ -7,7 +7,7 @@ import { LocalComputedMessageDataT } from "./local_computed_message_data";
 export class MiddlewareError extends Data.TaggedError("MiddlewareError")<{ err: Error }> { }
 
 type MiddlewareInterrupt = { readonly __brand: "MiddlewareInterrupt" };
-type MiddlewareContinue = { readonly __brand: "MiddlewareContinue" } | void | never;
+type MiddlewareContinue = { readonly __brand: "MiddlewareContinue" } | void | void;
 export type MiddlewarePassthrough = MiddlewareInterrupt | MiddlewareContinue;
 export const MiddlewareInterrupt: MiddlewareInterrupt = { __brand: "MiddlewareInterrupt" } as MiddlewareInterrupt;
 export const MiddlewareContinue: MiddlewareContinue = { __brand: "MiddlewareContinue" } as MiddlewareContinue;
@@ -45,7 +45,7 @@ export const useMiddleware = Effect.gen(function* (_) {
         position
     });
 
-    return yield* _(Effect.never);
+    return yield* _(Effect.void);
 });
 
 export const middlewareEffect = (position: MiddlewarePosition) =>
@@ -64,7 +64,7 @@ export const middlewareEffect = (position: MiddlewarePosition) =>
             }
         }
 
-        return yield* _(Effect.never);
+        return yield* _(Effect.void);
     });
 
 export const coreMiddlewareEffect = (position: MiddlewarePosition) =>

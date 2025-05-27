@@ -41,5 +41,5 @@ export const setLocalAddress = (new_address: Address) => Effect.gen(function* (_
     Address._setLocalAddress(new_address);
     old_endpoint.address = Address.local_address();
 
-    return yield* _(Effect.never);
+    return yield* _(Effect.void);
 });

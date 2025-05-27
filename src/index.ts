@@ -1,12 +1,13 @@
 import { Effect } from "effect";
-import { init, addrA, addrB } from "./demo/setUp";
-import { sendMessage } from "./demo/setUp";
+import { init, addrA, sendMessage, registerListener } from "./demo/setUp";
 import { Message } from "./base/message";
+
 
 console.log("Starting...");
 Effect.runPromise(init).then(() => {
-    console.log("Sending message...");
+    registerListener((msg) => {
+        console.log("Recieved: ", msg);
+    });
+}).then(() => {
     sendMessage(new Message(addrA, "Hello!"));
-}).catch((e) => {
-    console.log(e);
 });

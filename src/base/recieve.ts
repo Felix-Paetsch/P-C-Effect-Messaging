@@ -20,7 +20,7 @@ export const recieve = pipe(
     (c) => Effect.gen(function* (_) {
         const interrupt = yield* _(c);
         if (interrupt == MiddlewareInterrupt) {
-            return yield* _(Effect.never);
+            return yield* _(Effect.void);
         } else {
             return yield* send;
         }

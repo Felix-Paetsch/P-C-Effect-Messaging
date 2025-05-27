@@ -20,7 +20,7 @@ export const send = Effect.gen(function* (_) {
 
     const interrupt = yield* coreMiddlewareEffect(direction == "outgoing" ? "MSG_OUT" : "MSG_IN");
     if (interrupt == MiddlewareInterrupt) {
-        return yield* _(Effect.never);
+        return yield* _(Effect.void);
     }
 
     if (Equal.equals(address, Address.local_address())) {
@@ -29,7 +29,7 @@ export const send = Effect.gen(function* (_) {
 
     const interrupt2 = yield* middlewareEffect(direction == "outgoing" ? "MSG_OUT" : "MSG_IN");
     if (interrupt2 == MiddlewareInterrupt) {
-        return yield* _(Effect.never);
+        return yield* _(Effect.void);
     }
 
     if (message.prefered_communication_channel) {

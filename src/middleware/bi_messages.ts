@@ -24,7 +24,7 @@ export class AlreadyRespondedError extends Data.TaggedError("AlreadyRespondedErr
 }> { }
 
 
-export type ResponseEffect = Effect.Effect<MiddlewarePassthrough, MiddlewareError, never>;
+export type ResponseEffect = Effect.Effect<MiddlewarePassthrough, MiddlewareError, void>;
 export const make_message_bidirectional = (message: Message, timeout: number = 5000) => {
     const uuid = uuidv4();
     message.meta_data.bidirectional_message = {
@@ -88,7 +88,7 @@ export const bidirectional_middleware = (middleware: Middleware[] = []) => Effec
     if (
         typeof bidirectional_message === "undefined" || !Equal.equals(message.target, Address.local_address())
     ) {
-        return yield* Effect.never;
+        return yield* Effect.void;
     }
 
     const data = Schema.decodeUnknownOption(bidirectional_message_schema)(bidirectional_message);
@@ -128,7 +128,7 @@ export const bidirectional_middleware = (middleware: Middleware[] = []) => Effec
     if (message_queue[uuid]) {
         message_queue[uuid].resolve(message);
     }
-    return yield* Effect.never;
+    return yield* Effect.void;
 }).pipe(Effect.catchAll(e => Effect.gen(function* (_) {
     const message = yield* _(MessageT);
     const uuid = message.meta_data.bidirectional_message.msg_uuid as UUID;

@@ -8,19 +8,19 @@ import { CallbackRegistrationError } from "./listen";
 
 type InCommunicationChannel = {
     direction: "IN";
-    recieve_cb: (recieve_effect: Effect.Effect<never, never, SerializedMessageT>) => void;
-    remove_cb?: (remove_effect: Effect.Effect<never, CommunicatorNotFoundError, never>) => void;
+    recieve_cb: (recieve_effect: Effect.Effect<void, void, SerializedMessageT>) => void;
+    remove_cb?: (remove_effect: Effect.Effect<void, CommunicatorNotFoundError, void>) => void;
 }
 type OutCommunicationChannel = {
     direction: "OUT";
-    send: Effect.Effect<never, MessageTransmissionError, SerializedMessageT>;
-    remove_cb?: (remove_effect: Effect.Effect<never, CommunicatorNotFoundError, never>) => void;
+    send: Effect.Effect<void, MessageTransmissionError, SerializedMessageT>;
+    remove_cb?: (remove_effect: Effect.Effect<void, CommunicatorNotFoundError, void>) => void;
 }
 type InOutCommunicationChannel = {
     direction: "INOUT";
-    recieve_cb: (recieve_effect: Effect.Effect<never, never, SerializedMessageT>) => void;
-    send: Effect.Effect<never, MessageTransmissionError, SerializedMessageT>;
-    remove_cb?: (remove_effect: Effect.Effect<never, CommunicatorNotFoundError, never>) => void;
+    recieve_cb: (recieve_effect: Effect.Effect<void, void, SerializedMessageT>) => void;
+    send: Effect.Effect<void, MessageTransmissionError, SerializedMessageT>;
+    remove_cb?: (remove_effect: Effect.Effect<void, CommunicatorNotFoundError, void>) => void;
 }
 
 export type CommunicationChannel = InCommunicationChannel | OutCommunicationChannel | InOutCommunicationChannel;
@@ -29,7 +29,7 @@ export class CommunicationChannelT extends Context.Tag("CommunicationChannelT")<
 >() { }
 
 export type TryNextCommunicationChannelEffect =
-    Effect.Effect<never, NoValidCommunicationChannelsError | MessageChannelError, SerializedMessageT | AddressT>
+    Effect.Effect<void, NoValidCommunicationChannelsError | MessageChannelError, SerializedMessageT | AddressT>
 export class MessageChannelError extends Data.TaggedError("MessageChannelError")<{
     err: Error,
     communication_channel: CommunicationChannel,
@@ -116,7 +116,7 @@ const removeChannelEffect = (communicationChannel: CommunicationChannel) =>
                 if (prev_length == endpoint.communicationChannels.length) {
                     return yield* _(Effect.fail(new CommunicatorNotFoundError()));
                 }
-                return yield* _(Effect.never);
+                return;
             }
         }
 
@@ -134,16 +134,19 @@ export const registerCommunicationChannel = Effect.gen(function* (_) {
     if (typeof communicationChannel.remove_cb == "function") {
         yield* Effect.try(() => {
             return communicationChannel.remove_cb!(remove_effect)
-        }).pipe(Effect.catchAll(e => {
-            const err = e instanceof Error ? e : new Error("Couldn't register remove callback");
-            return remove_effect.pipe(
-                Effect.andThen(Effect.fail(new CallbackRegistrationError({ err }))),
-                Effect.catchTag(
+        }).pipe(
+            Effect.catchAll(e => {
+                const err = e instanceof Error ? e : new Error("Couldn't register remove callback");
+                return Effect.all([
+                    remove_effect,
+                    Effect.fail(new CallbackRegistrationError({ err })),
+                ]).pipe(Effect.catchTag(
                     "CommunicatorNotFoundError",
-                    () => Effect.never // If it is not there for some reason, we are good
+                    () => Effect.void // If it is not there for some reason, we are good
                 )
-            )
-        }));
+                )
+            })
+        );
     }
 
     if (communicationChannel.direction == "IN" || communicationChannel.direction == "INOUT") {
@@ -152,21 +155,20 @@ export const registerCommunicationChannel = Effect.gen(function* (_) {
                 Effect.provideService(recieve, RecieveAddressT, address).pipe(
                     Effect.catchAll(e => {
                         return applyRecieveErrorListeners(e)
-                    }),
-                    Effect.andThen(Effect.never)
+                    })
                 )
             )
         }).pipe(Effect.catchAll(e => {
             const err = e instanceof Error ? e : new Error("Couldn't register remove callback");
-            return remove_effect.pipe(
-                Effect.andThen(Effect.fail(new CallbackRegistrationError({ err }))),
-                Effect.catchTag(
-                    "CommunicatorNotFoundError",
-                    () => Effect.never // If it is not there for some reason, we are good
-                )
-            )
+            return Effect.all([
+                remove_effect,
+                Effect.fail(new CallbackRegistrationError({ err })),
+            ]).pipe(Effect.catchTag(
+                "CommunicatorNotFoundError",
+                () => Effect.void
+            ))
         }));
     }
 
-    return yield* _(Effect.never);
+    return yield* _(Effect.void);
 });
