@@ -32,9 +32,17 @@ export const send = Effect.gen(function* (_) {
         return yield* _(Effect.never);
     }
 
+    if (message.prefered_communication_channel) {
+        const pc = message.prefered_communication_channel as any;
+        if (pc.send) {
+            communication_channels.unshift(pc.prefered_communication_channel);
+        }
+    }
+
     if (communication_channels.length == 0) {
         return yield* _(Effect.fail(new AddressNotFoundError({ address })));
     }
+
     return yield* _(
         Effect.provideService(
             tryCommunicationChannels(communication_channels, serialized_message, address),

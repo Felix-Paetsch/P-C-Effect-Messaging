@@ -1,5 +1,6 @@
 import { Context, Data, Effect, ParseResult, pipe, Schema } from "effect";
 import { Address } from "./address";
+import { CommunicationChannel } from "./communication_channels";
 
 export class MessageT extends Context.Tag("MessageT")<
     MessageT,
@@ -16,7 +17,8 @@ export class Message {
     constructor(
         public target: Address, // | Communicator,
         public readonly content: string,
-        public meta_data: { [key: string]: any } = {}
+        public meta_data: { [key: string]: any } = {},
+        public prefered_communication_channel: CommunicationChannel | null = null
     ) { }
 
     serialize(): Effect.Effect<SerializedMessage, MessageSerializationError> {

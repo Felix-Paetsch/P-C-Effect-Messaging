@@ -4,15 +4,15 @@ import { findOrCreateEndpoint } from "./endpoints";
 import { MessageT } from "./message";
 import { LocalComputedMessageDataT } from "./local_computed_message_data";
 
-class MiddlewareError extends Data.TaggedError("MiddlewareError")<{ err: Error }> { }
+export class MiddlewareError extends Data.TaggedError("MiddlewareError")<{ err: Error }> { }
 
 type MiddlewareInterrupt = { readonly __brand: "MiddlewareInterrupt" };
 type MiddlewareContinue = { readonly __brand: "MiddlewareContinue" } | void | never;
-type MiddlewarePassthrough = MiddlewareInterrupt | MiddlewareContinue;
+export type MiddlewarePassthrough = MiddlewareInterrupt | MiddlewareContinue;
 export const MiddlewareInterrupt: MiddlewareInterrupt = { __brand: "MiddlewareInterrupt" } as MiddlewareInterrupt;
 export const MiddlewareContinue: MiddlewareContinue = { __brand: "MiddlewareContinue" } as MiddlewareContinue;
 
-type Middleware = Effect.Effect<MiddlewarePassthrough, MiddlewareError, MessageT | LocalComputedMessageDataT>;
+export type Middleware = Effect.Effect<MiddlewarePassthrough, MiddlewareError, MessageT | LocalComputedMessageDataT>;
 
 export type MiddlewarePosition = "MSG_IN" | "MSG_OUT" | "ALL";
 export type RegisteredMiddleware = {

@@ -6,18 +6,25 @@ import { applyRecieveErrorListeners } from "./listen";
 import { recieve, RecieveAddressT } from "./recieve";
 import { CallbackRegistrationError } from "./listen";
 
-type BaseCommunicationChannel = {
-    remove_cb?: (remove_effect: Effect.Effect<never, CommunicatorNotFoundError, never>) => void;
-    direction: "OUT" | "IN" | "INOUT";
-}
-type InCommunicationChannel = BaseCommunicationChannel & {
+type InCommunicationChannel = {
+    direction: "IN";
     recieve_cb: (recieve_effect: Effect.Effect<never, never, SerializedMessageT>) => void;
+    remove_cb?: (remove_effect: Effect.Effect<never, CommunicatorNotFoundError, never>) => void;
 }
-type OutCommunicationChannel = BaseCommunicationChannel & {
+type OutCommunicationChannel = {
+    direction: "OUT";
     send: Effect.Effect<never, MessageTransmissionError, SerializedMessageT>;
+    remove_cb?: (remove_effect: Effect.Effect<never, CommunicatorNotFoundError, never>) => void;
 }
-type CommunicationChannel = InCommunicationChannel | OutCommunicationChannel;
-class CommunicationChannelT extends Context.Tag("CommunicationChannelT")<
+type InOutCommunicationChannel = {
+    direction: "INOUT";
+    recieve_cb: (recieve_effect: Effect.Effect<never, never, SerializedMessageT>) => void;
+    send: Effect.Effect<never, MessageTransmissionError, SerializedMessageT>;
+    remove_cb?: (remove_effect: Effect.Effect<never, CommunicatorNotFoundError, never>) => void;
+}
+
+export type CommunicationChannel = InCommunicationChannel | OutCommunicationChannel | InOutCommunicationChannel;
+export class CommunicationChannelT extends Context.Tag("CommunicationChannelT")<
     CommunicationChannelT, CommunicationChannel
 >() { }
 

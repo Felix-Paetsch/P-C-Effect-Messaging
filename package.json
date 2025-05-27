@@ -5,7 +5,7 @@
   "scripts": {
     "dev3": "concurrently \"tsx watch src/demos/3fold/s1.ts\" \"tsx watch src/demos/3fold/s2.ts\" \"tsx watch src/demos/3fold/s3.ts\"",
 
-    "dev:node": "tsx watch src/demos/3fold/s1.ts",
+    "dev:node": "tsx watch src/index.ts",
     "dev:browser": "vite",
     "build": "vite build",
     "preview": "vite preview"

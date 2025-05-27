@@ -1,5 +1,5 @@
-import { Data, Effect, Context } from "effect";
-import { MessageT, SerializedMessageT } from "./message";
+import { Data, Effect, Context, Option } from "effect";
+import { Message, MessageT, SerializedMessage, SerializedMessageT } from "./message";
 import { LocalComputedMessageDataT } from "./local_computed_message_data";
 
 export class CallbackRegistrationError extends Data.TaggedError("RegisterChannelError")<{
@@ -62,9 +62,13 @@ export class RecieveError extends Data.TaggedError("RecieveError")<{
     err: Error;
 }> { }
 
-export class RecieveErrorT extends Context.Tag("RecieveErrorT")<RecieveErrorT, RecieveError>() { }
+export class RecieveErrorT extends Context.Tag("RecieveErrorT")<RecieveErrorT, {
+    RecieveError: RecieveError;
+    SerializedMessage: SerializedMessage | null;
+    Message: Message | null;
+}>() { }
 
-export type ErrorListenEffect = Effect.Effect<never, never, SerializedMessageT | RecieveErrorT>;
+export type ErrorListenEffect = Effect.Effect<never, never, RecieveErrorT>;
 export class ErrorListenerT extends Context.Tag("ErrorListenerT")<ErrorListenerT, {
     listen: ErrorListenEffect,
     remove_cb?: (remove_effect: Effect.Effect<never, ListenerNotFoundError, never>) => void;
@@ -111,5 +115,17 @@ export const applyRecieveErrorListeners = (e: Error) => Effect.gen(function* (_)
     }
     return yield* Effect.never;
 }).pipe(
-    Effect.provideService(RecieveErrorT, new RecieveError({ err: e }))
+    Effect.provideServiceEffect(RecieveErrorT, Effect.gen(function* (_) {
+        const msgO = yield* Effect.serviceOption(MessageT)
+        const msg = Option.isNone(msgO) ? null : msgO.value;
+
+        const serialized_msgO = yield* Effect.serviceOption(SerializedMessageT)
+        const serialized_msg = Option.isNone(serialized_msgO) ? null : serialized_msgO.value;
+
+        return {
+            RecieveError: new RecieveError({ err: e }),
+            SerializedMessage: serialized_msg,
+            Message: msg
+        }
+    })),
 );
