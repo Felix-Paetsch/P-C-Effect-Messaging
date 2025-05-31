@@ -13,13 +13,32 @@ export class MessageDeserializationError extends Data.TaggedError("MessageDeseri
 export type SerializedMessage = string & { readonly __brand: "SerializedMessage" };
 export class SerializedMessageT extends Context.Tag("SerializedMessageT")<SerializedMessageT, SerializedMessage>() { }
 
+export type MessageContent = {
+    serialized: string | null,
+    deserialized: { [key: string]: JSON } | null
+}
+
+const deserialized_schema = Schema.Record({
+    key: Schema.String,
+    value: Schema.Any
+});
+const transform_message_content = Schema.parseJson(deserialized_schema);
+
 export class Message {
+    private msg_content: MessageContent;
+
     constructor(
         public target: Address, // | Communicator,
-        public readonly content: string,
-        public meta_data: { [key: string]: any } = {},
+        content: string | { [key: string]: JSON },
+        public meta_data: { [key: string]: JSON } = {},
         public prefered_communication_channel: CommunicationChannel | null = null
-    ) { }
+    ) {
+        if (typeof content === "string") {
+            this.msg_content = { serialized: content, deserialized: null };
+        } else {
+            this.msg_content = { serialized: null, deserialized: content };
+        }
+    }
 
     serialize(): Effect.Effect<SerializedMessage, MessageSerializationError> {
         return Schema.encode(Message.MessageFromString)(this)
@@ -34,6 +53,39 @@ export class Message {
             .pipe(
                 Effect.catchTag("ParseError", () => new MessageDeserializationError())
             )
+    }
+
+    get serialized_content(): Effect.Effect<string, MessageSerializationError> {
+        const this_msg = this;
+        return Effect.gen(function* (_) {
+            if (this_msg.msg_content.serialized === null) {
+                if (this_msg.msg_content.deserialized === null) {
+                    return yield* _(Effect.fail(new MessageSerializationError()));
+                }
+
+                const serialized = yield* _(Schema.encode(transform_message_content)(this_msg.msg_content.deserialized));
+                this_msg.msg_content.serialized = serialized;
+            }
+
+            return this_msg.msg_content.serialized!;
+        }).pipe(Effect.catchTag("ParseError", () => new MessageSerializationError()));
+
+    }
+
+    get content(): Effect.Effect<{ [key: string]: JSON }, MessageDeserializationError> {
+        const this_msg = this;
+        return Effect.gen(function* (_) {
+            if (this_msg.msg_content.deserialized === null) {
+                if (this_msg.msg_content.serialized === null) {
+                    return yield* _(Effect.fail(new MessageDeserializationError()));
+                }
+
+                const deserialized = yield* _(Schema.decode(transform_message_content)(this_msg.msg_content.serialized));
+                this_msg.msg_content.deserialized = deserialized;
+            }
+
+            return this_msg.msg_content.deserialized!;
+        }).pipe(Effect.catchTag("ParseError", () => new MessageDeserializationError()));
     }
 
     static MessageFromString = Schema.transformOrFail(Schema.String, Schema.instanceOf(Message), {
@@ -62,11 +114,14 @@ export class Message {
             ),
         encode: (msg: Message, _, ast) =>
             pipe(
-                Effect.try(() => JSON.stringify({
-                    target: Schema.encodeSync(Address.AddressFromString)(msg.target),
-                    content: msg.content,
-                    meta_data: msg.meta_data
-                })),
+                msg.serialized_content,
+                Effect.andThen(serialized_content =>
+                    Effect.try(() => JSON.stringify({
+                        target: Schema.encodeSync(Address.AddressFromString)(msg.target),
+                        content: serialized_content,
+                        meta_data: msg.meta_data
+                    }))
+                ),
                 Effect.catchAll(e => {
                     return ParseResult.fail(
                         new ParseResult.Type(ast, "", `Failed serializing message: ${e instanceof Error ? e.message : String(e)}`)
