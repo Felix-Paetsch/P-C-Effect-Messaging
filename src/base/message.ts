@@ -88,6 +88,21 @@ export class Message {
         }).pipe(Effect.catchTag("ParseError", () => new MessageDeserializationError()));
     }
 
+    get content_string(): Effect.Effect<string, MessageDeserializationError> {
+        return this.content.pipe(Effect.map(content => JSON.stringify(content)));
+    }
+
+    static content(msg: Message | string) {
+        return Effect.gen(function* (_) {
+            if (typeof msg === "string") {
+                const msg_obj = yield* _(Message.deserialize(msg as SerializedMessage));
+                return yield* msg_obj.content;
+            }
+
+            return yield* msg.content;
+        });
+    }
+
     static MessageFromString = Schema.transformOrFail(Schema.String, Schema.instanceOf(Message), {
         decode: (str: string, _, ast) =>
             pipe(
