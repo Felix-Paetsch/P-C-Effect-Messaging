@@ -9,18 +9,18 @@ import { CallbackRegistrationError } from "./listen";
 type InCommunicationChannel = {
     direction: "IN";
     recieve_cb: (recieve_effect: Effect.Effect<void, void, SerializedMessageT>) => void;
-    remove_cb?: (remove_effect: Effect.Effect<void, CommunicatorNotFoundError, void>) => void;
+    remove_cb?: (remove_effect: Effect.Effect<void, void, never>) => void;
 }
 type OutCommunicationChannel = {
     direction: "OUT";
     send: Effect.Effect<void, MessageTransmissionError, SerializedMessageT>;
-    remove_cb?: (remove_effect: Effect.Effect<void, CommunicatorNotFoundError, void>) => void;
+    remove_cb?: (remove_effect: Effect.Effect<void, void, never>) => void;
 }
 type InOutCommunicationChannel = {
     direction: "INOUT";
     recieve_cb: (recieve_effect: Effect.Effect<void, void, SerializedMessageT>) => void;
     send: Effect.Effect<void, MessageTransmissionError, SerializedMessageT>;
-    remove_cb?: (remove_effect: Effect.Effect<void, CommunicatorNotFoundError, void>) => void;
+    remove_cb?: (remove_effect: Effect.Effect<void, void, never>) => void;
 }
 
 export type CommunicationChannel = InCommunicationChannel | OutCommunicationChannel | InOutCommunicationChannel;
@@ -50,7 +50,7 @@ export const findAllOutCommunicationChannels = (address: Address) => {
         if (Equal.equals(endpoint.address, address)) {
             for (const communicationChannel of endpoint.communicationChannels) {
                 if (["IN", "INOUT"].includes(communicationChannel.direction)) {
-                    total_strict_channels.push(communicationChannel);
+                    total_strict_channels.push(communicationChannel as OutCommunicationChannel);
                 }
             }
         } else if (
@@ -59,7 +59,7 @@ export const findAllOutCommunicationChannels = (address: Address) => {
         ) {
             for (const communicationChannel of endpoint.communicationChannels) {
                 if (["IN", "INOUT"].includes(communicationChannel.direction)) {
-                    total_weak_channels.push(communicationChannel);
+                    total_weak_channels.push(communicationChannel as OutCommunicationChannel);
                 }
             }
         }
@@ -110,18 +110,19 @@ export class CommunicatorNotFoundError extends Data.TaggedError("CommunicatorNot
 const removeChannelEffect = (communicationChannel: CommunicationChannel) =>
     Effect.gen(function* (_) {
         for (const endpoint of endpoints) {
-            if (Equal.equals(endpoint.address, endpoint.address)) {
-                const prev_length = endpoint.communicationChannels.length;
-                endpoint.communicationChannels = endpoint.communicationChannels.filter(c => c != communicationChannel);
-                if (prev_length == endpoint.communicationChannels.length) {
-                    return yield* _(Effect.fail(new CommunicatorNotFoundError()));
-                }
-                return;
+            const prev_length = endpoint.communicationChannels.length;
+            endpoint.communicationChannels = endpoint.communicationChannels.filter(c => c != communicationChannel);
+            if (prev_length < endpoint.communicationChannels.length) {
+                return yield* _(Effect.void);
             }
         }
 
         return yield* _(Effect.fail(new CommunicatorNotFoundError()));
-    })
+    }).pipe(
+        Effect.catchAll(e => {
+            return Effect.void;
+        })
+    )
 
 export const registerCommunicationChannel = Effect.gen(function* (_) {
     const address = yield* _(AddressT);
@@ -140,11 +141,7 @@ export const registerCommunicationChannel = Effect.gen(function* (_) {
                 return Effect.all([
                     remove_effect,
                     Effect.fail(new CallbackRegistrationError({ err })),
-                ]).pipe(Effect.catchTag(
-                    "CommunicatorNotFoundError",
-                    () => Effect.void // If it is not there for some reason, we are good
-                )
-                )
+                ])
             })
         );
     }
@@ -163,10 +160,7 @@ export const registerCommunicationChannel = Effect.gen(function* (_) {
             return Effect.all([
                 remove_effect,
                 Effect.fail(new CallbackRegistrationError({ err })),
-            ]).pipe(Effect.catchTag(
-                "CommunicatorNotFoundError",
-                () => Effect.void
-            ))
+            ])
         }));
     }
 
