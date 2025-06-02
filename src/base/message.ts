@@ -13,9 +13,11 @@ export class MessageDeserializationError extends Data.TaggedError("MessageDeseri
 export type SerializedMessage = string & { readonly __brand: "SerializedMessage" };
 export class SerializedMessageT extends Context.Tag("SerializedMessageT")<SerializedMessageT, SerializedMessage>() { }
 
+export type Json = string | number | boolean | null | Json[] | { [key: string]: Json };
+
 export type MessageContent = {
     serialized: string | null,
-    deserialized: { [key: string]: JSON } | null
+    deserialized: { [key: string]: Json } | null
 }
 
 const deserialized_schema = Schema.Record({
@@ -29,8 +31,8 @@ export class Message {
 
     constructor(
         public target: Address, // | Communicator,
-        content: string | { [key: string]: JSON },
-        public meta_data: { [key: string]: JSON } = {},
+        content: string | { [key: string]: Json },
+        public meta_data: { [key: string]: Json } = {},
         public prefered_communication_channel: CommunicationChannel | null = null
     ) {
         if (typeof content === "string") {
@@ -72,7 +74,7 @@ export class Message {
 
     }
 
-    get content(): Effect.Effect<{ [key: string]: JSON }, MessageDeserializationError> {
+    get content(): Effect.Effect<{ [key: string]: Json }, MessageDeserializationError> {
         const this_msg = this;
         return Effect.gen(function* (_) {
             if (this_msg.msg_content.deserialized === null) {
