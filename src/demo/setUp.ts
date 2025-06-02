@@ -19,9 +19,9 @@ const recieveA = (msg: SerializedMessage) => {
     if (!effectA) throw new Error("effectA is not set");
     Effect.runPromise(effectA.pipe(Effect.provideService(SerializedMessageT, msg)));
 };
-let effectA: Effect.Effect<void, void, SerializedMessageT> | null = null;
+let effectA: Effect.Effect<void, never, SerializedMessageT> | null = null;
 
-const recieve_cbA = (effect: Effect.Effect<void, void, SerializedMessageT>) => {
+const recieve_cbA = (effect: Effect.Effect<void, never, SerializedMessageT>) => {
     effectA = effect;
 };
 

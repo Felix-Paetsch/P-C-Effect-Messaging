@@ -1,19 +1,19 @@
 import { Effect } from "effect";
 import { Address, AddressT } from "./address";
-import { Message, MessageT, SerializedMessage, SerializedMessageT } from "./message";
+import { MessageT, TransmittableMessage, TransmittableMessageT } from "./message";
 import { registerCommunicationChannel, CommunicationChannelT, MessageTransmissionError, CommunicatorNotFoundError } from "./communication_channels";
 
 type LocalCommunicator = {
-    recievedMessage: (msg: SerializedMessage) => Effect.Effect<void, never, never>;
+    recievedMessage: (msg: TransmittableMessage) => Effect.Effect<void, never, never>;
     address: Address;
     remove: () => Effect.Effect<void, never, never>;
 }
 
 export const CreateLocalCommunicator = (
-    listen: Effect.Effect<void, never, SerializedMessageT>,
+    listen: Effect.Effect<void, never, MessageT>,
     address: Address = Address.local_address()
 ) => Effect.gen(function* (_) {
-    let on_recieve: Effect.Effect<void, never, SerializedMessageT> | null = null;
+    let on_recieve: Effect.Effect<void, never, TransmittableMessageT> | null = null;
     let remove_effect: Effect.Effect<void, never, never> | null = null;
 
     yield* registerCommunicationChannel.pipe(
@@ -23,14 +23,13 @@ export const CreateLocalCommunicator = (
             send: listen.pipe(
                 Effect.provideServiceEffect(
                     MessageT,
-                    Effect.gen(function* () {
-                        const sm = yield* SerializedMessageT;
-                        return yield* Message.deserialize(sm);
-                    })
+                    TransmittableMessageT.pipe(
+                        Effect.flatMap(msg => msg.message)
+                    )
                 ),
                 Effect.catchAll(err => Effect.fail(new MessageTransmissionError({ err })))
             ),
-            recieve_cb: (_on_recieve: Effect.Effect<void, never, SerializedMessageT>) => {
+            recieve_cb: (_on_recieve: Effect.Effect<void, never, TransmittableMessageT>) => {
                 on_recieve = _on_recieve;
             },
             remove_cb: (_remove_effect: Effect.Effect<void, never, never>) => {
@@ -40,10 +39,10 @@ export const CreateLocalCommunicator = (
     );
 
     return {
-        recievedMessage: (msg: SerializedMessage) => Effect.gen(function* (_) {
+        recievedMessage: (msg: TransmittableMessage) => Effect.gen(function* (_) {
             if (on_recieve) {
                 return yield* _(on_recieve.pipe(
-                    Effect.provideService(SerializedMessageT, msg)
+                    Effect.provideService(TransmittableMessageT, msg)
                 ));
             }
             return yield* _(Effect.fail(new MessageTransmissionError({ err: new Error("No on_recieve effect registered") })));

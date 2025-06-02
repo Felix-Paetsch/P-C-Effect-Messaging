@@ -68,7 +68,7 @@ export class RecieveErrorT extends Context.Tag("RecieveErrorT")<RecieveErrorT, {
     Message: Message | null;
 }>() { }
 
-export type ErrorListenEffect = Effect.Effect<void, void, RecieveErrorT>;
+export type ErrorListenEffect = Effect.Effect<void, never, RecieveErrorT>;
 export class ErrorListenerT extends Context.Tag("ErrorListenerT")<ErrorListenerT, {
     listen: ErrorListenEffect,
     remove_cb?: (remove_effect: Effect.Effect<void, ListenerNotFoundError, void>) => void;

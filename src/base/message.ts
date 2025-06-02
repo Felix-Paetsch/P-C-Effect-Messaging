@@ -145,3 +145,47 @@ export class Message {
             )
     });
 }
+
+
+export class TransmittableMessage {
+    constructor(
+        private msg: Message | SerializedMessage,
+        private addr: Address | null = null
+    ) { }
+
+    get message(): Effect.Effect<Message, MessageDeserializationError> {
+        const self = this;
+        return Effect.gen(function* (_) {
+            if (self.msg instanceof Message) {
+                return self.msg;
+            }
+
+            self.msg = yield* _(Message.deserialize(self.msg));
+            return self.msg;
+        })
+    }
+
+    get string(): Effect.Effect<SerializedMessage, MessageSerializationError> {
+        const self = this;
+        return Effect.gen(function* (_) {
+            if (self.msg instanceof Message) {
+                return yield* _(self.msg.serialize());
+            }
+
+            return self.msg;
+        })
+    }
+
+    get address(): Effect.Effect<Address, MessageDeserializationError> {
+        const self = this;
+        return Effect.gen(function* (_) {
+            if (typeof self.msg === "string" && self.addr) {
+                return self.addr;
+            }
+
+            return yield* _(self.message.pipe(Effect.map(msg => msg.target)));
+        })
+    }
+}
+
+export class TransmittableMessageT extends Context.Tag("TransmittableMessageT")<TransmittableMessageT, TransmittableMessage>() { }

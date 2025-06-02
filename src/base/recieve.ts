@@ -1,5 +1,5 @@
 import { Context, Effect, pipe } from "effect";
-import { Message, MessageT, SerializedMessageT } from "./message";
+import { Message, MessageT, SerializedMessageT, TransmittableMessageT } from "./message";
 import { Address, AddressT } from "./address";
 import { send } from "./send";
 import { middlewareEffect, MiddlewareInterrupt } from "./middleware";
@@ -28,8 +28,8 @@ export const recieve = pipe(
     Effect.provideServiceEffect(
         MessageT,
         Effect.gen(function* (_) {
-            const serialized = yield* _(SerializedMessageT);
-            return yield* Message.deserialize(serialized);
+            const msg = yield* _(TransmittableMessageT);
+            return yield* msg.message;
         })
     )
 )

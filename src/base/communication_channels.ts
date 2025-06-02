@@ -1,6 +1,6 @@
 import { Data, Effect, Equal, Context } from "effect";
 import { AddressT, Address } from "./address";
-import { SerializedMessageT, SerializedMessage } from "./message";
+import { SerializedMessageT, SerializedMessage, TransmittableMessageT, TransmittableMessage } from "./message";
 import { endpoints, findOrCreateEndpoint } from "./endpoints";
 import { applyRecieveErrorListeners } from "./listen";
 import { recieve, RecieveAddressT } from "./recieve";
@@ -8,19 +8,19 @@ import { CallbackRegistrationError } from "./listen";
 
 type InCommunicationChannel = {
     direction: "IN";
-    recieve_cb: (recieve_effect: Effect.Effect<void, void, SerializedMessageT>) => void;
-    remove_cb?: (remove_effect: Effect.Effect<void, void, never>) => void;
+    recieve_cb: (recieve_effect: Effect.Effect<void, never, TransmittableMessageT>) => void;
+    remove_cb?: (remove_effect: Effect.Effect<void, never, never>) => void;
 }
 type OutCommunicationChannel = {
     direction: "OUT";
-    send: Effect.Effect<void, MessageTransmissionError, SerializedMessageT>;
-    remove_cb?: (remove_effect: Effect.Effect<void, void, never>) => void;
+    send: Effect.Effect<void, MessageTransmissionError, TransmittableMessageT>;
+    remove_cb?: (remove_effect: Effect.Effect<void, never, never>) => void;
 }
 type InOutCommunicationChannel = {
     direction: "INOUT";
-    recieve_cb: (recieve_effect: Effect.Effect<void, void, SerializedMessageT>) => void;
-    send: Effect.Effect<void, MessageTransmissionError, SerializedMessageT>;
-    remove_cb?: (remove_effect: Effect.Effect<void, void, never>) => void;
+    recieve_cb: (recieve_effect: Effect.Effect<void, never, TransmittableMessageT>) => void;
+    send: Effect.Effect<void, MessageTransmissionError, TransmittableMessageT>;
+    remove_cb?: (remove_effect: Effect.Effect<void, never, never>) => void;
 }
 
 export type CommunicationChannel = InCommunicationChannel | OutCommunicationChannel | InOutCommunicationChannel;
@@ -72,8 +72,8 @@ export const tryCommunicationChannels =
         communication_channels: OutCommunicationChannel[],
         serialized_message: string,
         address: Address
-    ): TryNextCommunicationChannelEffect => {
-        return Effect.gen(function* (_) {
+    ): TryNextCommunicationChannelEffect =>
+        Effect.gen(function* (_) {
             if (communication_channels.length == 0) {
                 return yield* _(Effect.fail(new NoValidCommunicationChannelsError({
                     address: address
@@ -82,7 +82,9 @@ export const tryCommunicationChannels =
 
             const new_channel = communication_channels[0]!;
             return yield* _(Effect.provideService(
-                new_channel.send, SerializedMessageT, serialized_message as SerializedMessage
+                new_channel.send, TransmittableMessageT, new TransmittableMessage(
+                    serialized_message as SerializedMessage, address
+                )
             ));
         }).pipe(
             Effect.catchTag("MessageTransmissionError", (e) => {
@@ -102,7 +104,7 @@ export const tryCommunicationChannels =
                 }))
             })
         );
-    }
+
 
 
 export class CommunicatorNotFoundError extends Data.TaggedError("CommunicatorNotFoundError")<{}> { }
