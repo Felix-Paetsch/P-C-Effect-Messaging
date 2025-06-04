@@ -61,4 +61,10 @@ export class Address implements Equal.Equal {
     }
 
     static local_address = () => this._local_address;
+    static new_local_address = (secondary_id: UUID | null = null) => {
+        return new Address(
+            Address.local_address().primary_id,
+            secondary_id || uuidv4()
+        );
+    }
 }

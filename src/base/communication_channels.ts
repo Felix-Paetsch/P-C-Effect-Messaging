@@ -107,24 +107,23 @@ export const tryCommunicationChannels =
 
 
 
-export class CommunicatorNotFoundError extends Data.TaggedError("CommunicatorNotFoundError")<{}> { }
-
+// export class CommunicatorNotFoundError extends Data.TaggedError("CommunicatorNotFoundError")<{}> { }
 const removeChannelEffect = (communicationChannel: CommunicationChannel) =>
     Effect.gen(function* (_) {
         for (const endpoint of endpoints) {
             const prev_length = endpoint.communicationChannels.length;
             endpoint.communicationChannels = endpoint.communicationChannels.filter(c => c != communicationChannel);
             if (prev_length < endpoint.communicationChannels.length) {
+                if (endpoint.communicationChannels.length == 0) {
+                    endpoints.splice(endpoints.indexOf(endpoint), 1);
+                }
                 return yield* _(Effect.void);
             }
         }
 
-        return yield* _(Effect.fail(new CommunicatorNotFoundError()));
-    }).pipe(
-        Effect.catchAll(e => {
-            return Effect.void;
-        })
-    )
+        return yield* _(Effect.void);
+        //return yield* _(Effect.fail(new CommunicatorNotFoundError()));
+    });
 
 export const registerCommunicationChannel = Effect.gen(function* (_) {
     const address = yield* _(AddressT);

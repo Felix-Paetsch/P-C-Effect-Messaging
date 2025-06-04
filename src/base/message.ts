@@ -155,6 +155,9 @@ export class TransmittableMessage {
         private addr: Address | null = null
     ) { }
 
+    content: Effect.Effect<{ [key: string]: Json }, MessageDeserializationError> =
+        this.message.pipe(Effect.flatMap(msg => msg.content));
+
     get message(): Effect.Effect<Message, MessageDeserializationError> {
         const self = this;
         return Effect.gen(function* (_) {
