@@ -1,0 +1,23 @@
+{
+  "name": "messaging",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev3": "concurrently \"tsx watch src/demos/3fold/s1.ts\" \"tsx watch src/demos/3fold/s2.ts\" \"tsx watch src/demos/3fold/s3.ts\"",
+
+    "dev:node": "tsx watch src/index.ts",
+    "dev:browser": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "effect": "^3.15.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.24",
+    "ts-node-dev": "^2.0.0",
+    "tsx": "^4.19.4",
+    "typescript": "^5.4.2",
+    "vite": "^6.3.5"
+  }
+}
