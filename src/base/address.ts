@@ -10,10 +10,24 @@ export type SerializedAddress = `primary_id: ${UUID}\nsecondary_id: ${UUID}`
     & { readonly __brand: "SerializedAddress" };
 
 export class Address implements Equal.Equal {
+    readonly _primary_id: UUID;
+    readonly _secondary_id: UUID;
+
     constructor(
-        public readonly primary_id: UUID = uuidv4(),
-        public readonly secondary_id: UUID = uuidv4()
-    ) { }
+        primary_id: UUID = uuidv4(),
+        secondary_id: UUID = uuidv4()
+    ) {
+        this._primary_id = primary_id;
+        this._secondary_id = secondary_id;
+    }
+
+    get primary_id(): UUID {
+        return this._primary_id;
+    }
+
+    get secondary_id(): UUID {
+        return this._secondary_id;
+    }
 
     [Equal.symbol](that: Equal.Equal): boolean {
         if (that instanceof Address) {
@@ -60,11 +74,23 @@ export class Address implements Equal.Equal {
         this._local_address = address;
     }
 
-    static local_address = () => this._local_address;
-    static new_local_address = (secondary_id: UUID | null = null) => {
-        return new Address(
-            Address.local_address().primary_id,
-            secondary_id || uuidv4()
-        );
+    static get local_address() {
+        return this._local_address;
+    }
+
+    static new_local_address = (secondary_id: UUID = uuidv4()) => {
+        return new LocalAddress(secondary_id);
+    }
+}
+
+export class LocalAddress extends Address {
+    constructor(
+        secondary_id: UUID = uuidv4()
+    ) {
+        super(Address.local_address.primary_id, secondary_id)
+    }
+
+    get primary_id() {
+        return Address.local_address.primary_id
     }
 }

@@ -6,7 +6,7 @@ import { coreMiddlewareEffect, middlewareEffect, MiddlewareInterrupt } from "./m
 import { findAllOutCommunicationChannels, tryCommunicationChannels } from "./communication_channels";
 import { LocalComputedMessageDataT, sendLocalComputedMessageData } from "./local_computed_message_data";
 
-class AddressNotFoundError extends Data.TaggedError("AddressNotFoundError")<{
+export class AddressNotFoundError extends Data.TaggedError("AddressNotFoundError")<{
     address: Address;
 }> { }
 
@@ -23,7 +23,7 @@ export const send = Effect.gen(function* (_) {
         return yield* _(Effect.void);
     }
 
-    if (Equal.equals(address, Address.local_address())) {
+    if (Equal.equals(address, Address.local_address)) {
         return yield* _(applyListeners);
     }
 

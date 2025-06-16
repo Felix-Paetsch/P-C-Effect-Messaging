@@ -5,7 +5,7 @@ import { Middleware, MiddlewareError, MiddlewareInterrupt, MiddlewarePassthrough
 import { send } from "../base/send";
 import uuidv4, { UUID } from "../base/uuid";
 import { LocalComputedMessageDataT } from "../base/local_computed_message_data";
-import { applyRecieveErrorListeners } from "../base/listen";
+import { applyMessageProcessingErrorListeners } from "../base/listen";
 
 const bidirectional_message_schema = Schema.Struct({
     source: Address.AddressFromString,
@@ -19,24 +19,25 @@ export class TimeoutError extends Data.TaggedError("TimeoutError")<{
     message: Message;
     timeout: number;
 }> { }
+
 export class AlreadyRespondedError extends Data.TaggedError("AlreadyRespondedError")<{
     message: Message;
 }> { }
 
 
 export type ResponseEffect = Effect.Effect<MiddlewarePassthrough, MiddlewareError, void>;
-export const make_message_bidirectional = (message: Message, timeout: number = 5000) => {
+export const make_message_bidirectional = (message: Message, timeout: number = 5000) => Effect.gen(function* (_) {
     const uuid = uuidv4();
-    message.meta_data.bidirectional_message = {
-        source: Address.local_address().serialize(),
+    message.meta_data.bidirectional_message = yield* _(Schema.encode(bidirectional_message_schema)({
+        source: Address.local_address,
         msg_uuid: uuidv4(),
         timeout: timeout,
         created_at: new Date(),
         responding: false
-    };
+    }).pipe(Effect.orDie));
 
     const promise = bidirectional_message_promise(message, uuid, timeout);
-    return Effect.tryPromise({
+    return yield* _(Effect.tryPromise({
         try: () => promise,
         catch: (e) => {
             if (e instanceof TimeoutError) {
@@ -45,8 +46,8 @@ export const make_message_bidirectional = (message: Message, timeout: number = 5
 
             return new MiddlewareError({ err: new Error("Bidirectional message failed.") });
         }
-    });
-}
+    }));
+});
 
 const message_queue: {
     [key: UUID]: {
@@ -60,8 +61,8 @@ const bidirectional_message_promise = (message: Message, uuid: UUID, timeout: nu
     return new Promise<Message>((resolve, reject) => {
         message_queue[uuid] = {
             message: message,
-            resolve: (message: Message) => {
-                resolve(message);
+            resolve: (ret_msg: Message) => {
+                resolve(ret_msg);
                 delete message_queue[uuid];
             },
             reject: (error: Error) => {
@@ -84,9 +85,11 @@ const bidirectional_message_promise = (message: Message, uuid: UUID, timeout: nu
 export const bidirectional_middleware = (middleware: Middleware[] = []) => Effect.gen(function* (_) {
     const message = yield* _(MessageT);
     const bidirectional_message = message.meta_data.bidirectional_message;
+    const local_computed_message_data = yield* _(LocalComputedMessageDataT);
 
     if (
-        typeof bidirectional_message === "undefined" || !Equal.equals(message.target, Address.local_address())
+        typeof bidirectional_message === "undefined"
+        || !local_computed_message_data.at_target
     ) {
         return yield* Effect.void;
     }
@@ -112,7 +115,7 @@ export const bidirectional_middleware = (middleware: Middleware[] = []) => Effec
     }
 
     if (responding && !message_queue[uuid]) {
-        return yield* applyRecieveErrorListeners(new AlreadyRespondedError({ message }));
+        return yield* applyMessageProcessingErrorListeners(new AlreadyRespondedError({ message }));
     }
 
     for (const m of middleware) {
@@ -127,13 +130,21 @@ export const bidirectional_middleware = (middleware: Middleware[] = []) => Effec
 
     if (message_queue[uuid]) {
         message_queue[uuid].resolve(message);
+        return MiddlewareInterrupt;
     }
-    return yield* Effect.void;
 }).pipe(Effect.catchAll(e => Effect.gen(function* (_) {
     const message = yield* _(MessageT);
-    const uuid = message.meta_data.bidirectional_message.msg_uuid as UUID;
-    if (message_queue[uuid]) {
-        message_queue[uuid].reject(e);
+    const bidirectionalMessage = message.meta_data.bidirectional_message;
+    if (
+        typeof bidirectionalMessage === "object"
+        && bidirectionalMessage !== null
+        && "msg_uuid" in bidirectionalMessage
+        && typeof bidirectionalMessage.msg_uuid === "string"
+    ) {
+        const uuid = bidirectionalMessage.msg_uuid as UUID;
+        if (message_queue[uuid]) {
+            message_queue[uuid].reject(e);
+        }
     }
     return yield* Effect.fail(e);
 })));
@@ -141,7 +152,7 @@ export const bidirectional_middleware = (middleware: Middleware[] = []) => Effec
 const respond_fn = (message: Message) => {
     return (content: string, meta_data: { [key: string]: any } = {}): ResponseEffect => Effect.gen(function* (_) {
         const bidirectional_message = message.meta_data.bidirectional_message;
-        const data = Schema.decodeOption(bidirectional_message_schema)(bidirectional_message);
+        const data = Schema.decodeUnknownOption(bidirectional_message_schema)(bidirectional_message);
         if (Option.isNone(data)) {
             return yield* Effect.fail(new MiddlewareError({ err: new Error("Bidirectional message meta data has wrong format.") }));
         }
@@ -156,7 +167,7 @@ const respond_fn = (message: Message) => {
         }
 
         const res = new Message(source, content, meta_data);
-        res.meta_data.bidirectional_message.responding = true;
+        (res.meta_data.bidirectional_message as any).responding = true;
         return yield* send.pipe(Effect.provideService(MessageT, res));
     }).pipe(Effect.catchAll(e => {
         if (e instanceof MiddlewareError) {

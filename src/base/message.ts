@@ -146,6 +146,10 @@ export class Message {
                 })
             )
     });
+
+    as_transmittable() {
+        return new TransmittableMessage(this);
+    }
 }
 
 

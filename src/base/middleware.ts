@@ -71,5 +71,5 @@ export const coreMiddlewareEffect = (position: MiddlewarePosition) =>
     Effect.provideService(
         middlewareEffect(position),
         AddressT,
-        Address.local_address()
+        Address.local_address
     );

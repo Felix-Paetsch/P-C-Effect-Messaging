@@ -1,7 +1,7 @@
 import { Effect } from "effect";
-import { Address, AddressT } from "./address";
-import { MessageT, TransmittableMessage, TransmittableMessageT } from "./message";
-import { registerCommunicationChannel, CommunicationChannelT, MessageTransmissionError, CommunicatorNotFoundError } from "./communication_channels";
+import { Address, AddressT } from "../base/address";
+import { MessageT, TransmittableMessage, TransmittableMessageT } from "../base/message";
+import { registerCommunicationChannel, CommunicationChannelT, MessageTransmissionError } from "../base/communication_channels";
 
 type LocalCommunicator = {
     recievedMessage: (msg: TransmittableMessage) => Effect.Effect<void, never, never>;
@@ -11,7 +11,7 @@ type LocalCommunicator = {
 
 export const CreateLocalCommunicator = (
     listen: Effect.Effect<void, never, MessageT>,
-    address: Address = Address.local_address()
+    address: Address = Address.local_address
 ) => Effect.gen(function* (_) {
     let on_recieve: Effect.Effect<void, never, TransmittableMessageT> | null = null;
     let remove_effect: Effect.Effect<void, never, never> | null = null;
@@ -51,7 +51,6 @@ export const CreateLocalCommunicator = (
             if (remove_effect) {
                 return yield* remove_effect;
             }
-            return yield* _(Effect.fail(new CommunicatorNotFoundError()));
         }),
         address: address
     } as LocalCommunicator

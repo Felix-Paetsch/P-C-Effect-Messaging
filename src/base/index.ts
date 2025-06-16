@@ -1,14 +1,15 @@
 import { useMiddleware } from "./middleware";
 import { send } from "./send";
 import { registerCommunicationChannel } from "./communication_channels";
-import { setLocalAddress } from "./endpoints";
-import { listen, listenRecieveError } from "./listen";
+import { listen, listenMessageProcessingError } from "./listen";
+import { Address } from "./address";
+
+export const setLocalAddress = Address._setLocalAddress;
 
 export {
-    setLocalAddress,
     send,
     registerCommunicationChannel,
     useMiddleware,
     listen,
-    listenRecieveError
+    listenMessageProcessingError
 }

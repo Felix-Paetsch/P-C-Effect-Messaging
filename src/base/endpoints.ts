@@ -24,23 +24,3 @@ export const findOrCreateEndpoint = (address: Address): Endpoint => {
     endpoints.push(new_endpoint);
     return new_endpoint;
 }
-
-class AddressAlreadyInUseError extends Data.TaggedError("AddressAlreadyInUseError")<{
-    address: Address;
-}> { }
-
-export const setLocalAddress = (new_address: Address) => Effect.gen(function* (_) {
-    for (const endpoint of endpoints) {
-        if (Equal.equals(endpoint.address, new_address)) {
-            return yield* _(Effect.fail(new AddressAlreadyInUseError({
-                address: new_address
-            })));
-        }
-    }
-
-    const old_endpoint = findOrCreateEndpoint(Address.local_address());
-    Address._setLocalAddress(new_address);
-    old_endpoint.address = Address.local_address();
-
-    return yield* _(Effect.void);
-});

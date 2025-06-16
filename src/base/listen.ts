@@ -58,17 +58,17 @@ export const applyListeners = Effect.gen(function* (_) {
 
 // ============
 
-export class RecieveError extends Data.TaggedError("RecieveError")<{
+export class MessageProcessingError extends Data.TaggedError("MessageProcessingError")<{
     err: Error;
 }> { }
 
-export class RecieveErrorT extends Context.Tag("RecieveErrorT")<RecieveErrorT, {
-    RecieveError: RecieveError;
+export class MessageProcessingErrorT extends Context.Tag("MessageProcessingErrorT")<MessageProcessingErrorT, {
+    MessageProcessingError: MessageProcessingError;
     SerializedMessage: SerializedMessage | null;
     Message: Message | null;
 }>() { }
 
-export type ErrorListenEffect = Effect.Effect<void, never, RecieveErrorT>;
+export type ErrorListenEffect = Effect.Effect<void, never, MessageProcessingErrorT>;
 export class ErrorListenerT extends Context.Tag("ErrorListenerT")<ErrorListenerT, {
     listen: ErrorListenEffect,
     remove_cb?: (remove_effect: Effect.Effect<void, ListenerNotFoundError, void>) => void;
@@ -85,7 +85,7 @@ const removeErrorListenerEffect = (listener: ErrorListenEffect) => Effect.gen(fu
     return yield* Effect.void;
 });
 
-export const listenRecieveError = Effect.gen(function* (_) {
+export const listenMessageProcessingError = Effect.gen(function* (_) {
     const { listen, remove_cb } = yield* _(ErrorListenerT);
 
     registered_error_listeners.push(listen);
@@ -110,13 +110,13 @@ export const listenRecieveError = Effect.gen(function* (_) {
     return yield* _(Effect.void);
 });
 
-export const applyRecieveErrorListeners = (e: Error) => Effect.gen(function* (_) {
+export const applyMessageProcessingErrorListeners = (e: Error) => Effect.gen(function* (_) {
     for (const listener of registered_error_listeners) {
         yield* _(listener);
     }
     return yield* Effect.void;
 }).pipe(
-    Effect.provideServiceEffect(RecieveErrorT, Effect.gen(function* (_) {
+    Effect.provideServiceEffect(MessageProcessingErrorT, Effect.gen(function* (_) {
         const msgO = yield* Effect.serviceOption(MessageT)
         const msg = Option.isNone(msgO) ? null : msgO.value;
 
@@ -124,7 +124,7 @@ export const applyRecieveErrorListeners = (e: Error) => Effect.gen(function* (_)
         const serialized_msg = Option.isNone(serialized_msgO) ? null : serialized_msgO.value;
 
         return {
-            RecieveError: new RecieveError({ err: e }),
+            MessageProcessingError: new MessageProcessingError({ err: e }),
             SerializedMessage: serialized_msg,
             Message: msg
         }

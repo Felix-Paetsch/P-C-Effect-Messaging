@@ -2,7 +2,7 @@ import { Data, Effect, Equal, Context } from "effect";
 import { AddressT, Address } from "./address";
 import { SerializedMessageT, SerializedMessage, TransmittableMessageT, TransmittableMessage } from "./message";
 import { endpoints, findOrCreateEndpoint } from "./endpoints";
-import { applyRecieveErrorListeners } from "./listen";
+import { applyMessageProcessingErrorListeners } from "./listen";
 import { recieve, RecieveAddressT } from "./recieve";
 import { CallbackRegistrationError } from "./listen";
 
@@ -29,7 +29,7 @@ export class CommunicationChannelT extends Context.Tag("CommunicationChannelT")<
 >() { }
 
 export type TryNextCommunicationChannelEffect =
-    Effect.Effect<void, NoValidCommunicationChannelsError | MessageChannelError, SerializedMessageT | AddressT>
+    Effect.Effect<void, NoValidCommunicationChannelsError | MessageChannelError>
 export class MessageChannelError extends Data.TaggedError("MessageChannelError")<{
     err: Error,
     communication_channel: CommunicationChannel,
@@ -55,7 +55,7 @@ export const findAllOutCommunicationChannels = (address: Address) => {
             }
         } else if (
             Equal.equals(endpoint.address.primary_id, address.primary_id) &&
-            !Equal.equals(endpoint.address.primary_id, Address.local_address().primary_id)
+            !Equal.equals(endpoint.address.primary_id, Address.local_address.primary_id)
         ) {
             for (const communicationChannel of endpoint.communicationChannels) {
                 if (["IN", "INOUT"].includes(communicationChannel.direction)) {
@@ -152,7 +152,7 @@ export const registerCommunicationChannel = Effect.gen(function* (_) {
             return (communicationChannel as InCommunicationChannel).recieve_cb(
                 Effect.provideService(recieve, RecieveAddressT, address).pipe(
                     Effect.catchAll(e => {
-                        return applyRecieveErrorListeners(e)
+                        return applyMessageProcessingErrorListeners(e)
                     })
                 )
             )
