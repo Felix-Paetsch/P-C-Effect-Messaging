@@ -3,8 +3,9 @@ import { Address, AddressT } from "./address";
 import { findOrCreateEndpoint } from "./endpoints";
 import { MessageT } from "./message";
 import { LocalComputedMessageDataT } from "./local_computed_message_data";
+import { Message } from "./message";
 
-export class MiddlewareError extends Data.TaggedError("MiddlewareError")<{ err: Error }> { }
+export class MiddlewareError extends Data.TaggedError("MiddlewareError")<{ err: Error, message: Message }> { }
 
 type MiddlewareInterrupt = { readonly __brand: "MiddlewareInterrupt" };
 type MiddlewareContinue = { readonly __brand: "MiddlewareContinue" } | void | undefined;
