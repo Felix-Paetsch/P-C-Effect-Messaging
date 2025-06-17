@@ -7,7 +7,7 @@ import { LocalComputedMessageDataT } from "./local_computed_message_data";
 export class MiddlewareError extends Data.TaggedError("MiddlewareError")<{ err: Error }> { }
 
 type MiddlewareInterrupt = { readonly __brand: "MiddlewareInterrupt" };
-type MiddlewareContinue = { readonly __brand: "MiddlewareContinue" } | void | void;
+type MiddlewareContinue = { readonly __brand: "MiddlewareContinue" } | void | undefined;
 export type MiddlewarePassthrough = MiddlewareInterrupt | MiddlewareContinue;
 export const MiddlewareInterrupt: MiddlewareInterrupt = { __brand: "MiddlewareInterrupt" } as MiddlewareInterrupt;
 export const MiddlewareContinue: MiddlewareContinue = { __brand: "MiddlewareContinue" } as MiddlewareContinue;
