@@ -46,10 +46,15 @@ export const make_message_chain = (
     return yield* chain_message_promise_as_effect(message, chain_uid, timeout);
 });
 
+export type ChainMessageResult = {
+    message: Message,
+    respond: ResponseFunction
+}
+
 const chain_queue: {
     [key: UUID]: {
         last_message: Message,
-        resolve: (message: Message) => void,
+        resolve: (res: ChainMessageResult) => void,
         reject: (error: Error) => void
     }
 } = {};
@@ -66,11 +71,11 @@ const chain_message_promise_as_effect = (message: Message, chain_uid: UUID, time
     )
 
 const chain_message_promise = (message: Message, chain_uid: UUID, timeout: number) => {
-    return new Promise<Message>((resolve, reject) => {
+    return new Promise<ChainMessageResult>((resolve, reject) => {
         chain_queue[chain_uid] = {
             last_message: message,
-            resolve: (ret_msg: Message) => {
-                resolve(ret_msg);
+            resolve: (res: ChainMessageResult) => {
+                resolve(res);
                 delete chain_queue[chain_uid];
             },
             reject: (error: Error) => {
@@ -91,9 +96,9 @@ const chain_message_promise = (message: Message, chain_uid: UUID, timeout: numbe
 }
 
 export const chain_middleware = (
-    on_first_request: Effect.Effect<void, MiddlewareError, MessageT | ResponseFunctionT>,
-    process_message: Effect.Effect<void, MiddlewareError, MessageT | ResponseFunctionT>,
-    should_process_message: Effect.Effect<boolean, MiddlewareError, void> = Effect.succeed(true)
+    on_first_request: Effect.Effect<void, MiddlewareError, MessageT | ResponseFunctionT | LocalComputedMessageDataT>,
+    process_message: Effect.Effect<void, MiddlewareError, MessageT | ResponseFunctionT | LocalComputedMessageDataT>,
+    should_process_message: Effect.Effect<boolean, MiddlewareError, MessageT | LocalComputedMessageDataT> = Effect.succeed(true)
 ) => Effect.gen(function* (_) {
     const message = yield* _(MessageT);
     const chain_message = message.meta_data.chain_message;
@@ -132,7 +137,10 @@ export const chain_middleware = (
             })
         );
     } else if (chain_queue[data.value.msg_chain_uid as UUID]) {
-        chain_queue[data.value.msg_chain_uid as UUID].resolve(message);
+        chain_queue[data.value.msg_chain_uid as UUID].resolve({
+            message: message,
+            respond: continue_chain
+        });
     } else if (data.value.current_msg_chain_length === 1) {
         yield* on_first_request.pipe(Effect.provideService(
             ResponseFunctionT,
