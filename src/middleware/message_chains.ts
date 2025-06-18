@@ -1,5 +1,5 @@
 import { Effect, Schema, Option, Data, Context } from "effect";
-import { Message, MessageT } from "../base/message";
+import { Json, Message, MessageT } from "../base/message";
 import { Address } from "../base/address";
 import { MiddlewareContinue, MiddlewareError, MiddlewareInterrupt } from "../base/middleware";
 import { send } from "../base/send";
@@ -20,9 +20,14 @@ export class ChainTimeout extends Data.TaggedError("ChainTimeout")<{
     msg_chain_uid: string;
 }> { }
 
-export type ChainContinueEffect = Effect.Effect<void, MiddlewareError, void>;
 
-export type ResponseFunction = (content: string, meta_data: { [key: string]: any }, new_timeout?: number) => void;
+export type ChainMessageResult = {
+    message: Message,
+    respond: ResponseFunction
+}
+
+export type ChainContinueEffect = Effect.Effect<ChainMessageResult, MiddlewareError | ChainTimeout, never>;
+export type ResponseFunction = (content: { [key: string]: Json }, meta_data: { [key: string]: any }, new_timeout?: number) => ChainContinueEffect;
 export class ResponseFunctionT extends Context.Tag("ResponseFunctionT")<
     ResponseFunctionT,
     ResponseFunction
@@ -46,10 +51,10 @@ export const make_message_chain = (
     return yield* chain_message_promise_as_effect(message, chain_uid, timeout);
 });
 
-export type ChainMessageResult = {
-    message: Message,
-    respond: ResponseFunction
-}
+export class ChainMessageResultT extends Context.Tag("ChainMessageResultT")<
+    ChainMessageResultT,
+    ChainMessageResult
+>() { }
 
 const chain_queue: {
     [key: UUID]: {
@@ -96,8 +101,8 @@ const chain_message_promise = (message: Message, chain_uid: UUID, timeout: numbe
 }
 
 export const chain_middleware = (
-    on_first_request: Effect.Effect<void, MiddlewareError, MessageT | ResponseFunctionT | LocalComputedMessageDataT>,
-    process_message: Effect.Effect<void, MiddlewareError, MessageT | ResponseFunctionT | LocalComputedMessageDataT>,
+    on_first_request: Effect.Effect<void, MiddlewareError, MessageT | ResponseFunctionT | ChainMessageResultT | LocalComputedMessageDataT>,
+    process_message: Effect.Effect<void, MiddlewareError, MessageT | ResponseFunctionT | ChainMessageResultT | LocalComputedMessageDataT>,
     should_process_message: Effect.Effect<boolean, MiddlewareError, MessageT | LocalComputedMessageDataT> = Effect.succeed(true)
 ) => Effect.gen(function* (_) {
     const message = yield* _(MessageT);
@@ -123,11 +128,12 @@ export const chain_middleware = (
     }
 
     const continue_chain = continue_chain_fn(message);
+    const chain_message_context = Context.empty().pipe(
+        Context.add(ChainMessageResultT, { message: message, respond: continue_chain }),
+        Context.add(ResponseFunctionT, continue_chain)
+    )
 
-    yield* process_message.pipe(Effect.provideService(
-        ResponseFunctionT,
-        continue_chain
-    ));
+    yield* process_message.pipe(Effect.provide(chain_message_context));
 
     if (data.value.current_msg_chain_length > 1 && !chain_queue[data.value.msg_chain_uid as UUID]) {
         return yield* Effect.fail(
@@ -142,10 +148,7 @@ export const chain_middleware = (
             respond: continue_chain
         });
     } else if (data.value.current_msg_chain_length === 1) {
-        yield* on_first_request.pipe(Effect.provideService(
-            ResponseFunctionT,
-            continue_chain
-        ));
+        yield* on_first_request.pipe(Effect.provide(chain_message_context));
     }
 
     return MiddlewareInterrupt;
@@ -167,7 +170,7 @@ export const chain_middleware = (
 })));
 
 const continue_chain_fn = (message: Message): ResponseFunction => {
-    return (content: string, meta_data: { [key: string]: any } = {}, new_timeout?: number): ChainContinueEffect => Effect.gen(function* (_) {
+    return (content: { [key: string]: Json }, meta_data: { [key: string]: any } = {}, new_timeout?: number): ChainContinueEffect => Effect.gen(function* (_) {
         const chain_message = message.meta_data.chain_message;
         const data = Schema.decodeUnknownOption(chain_message_schema)(chain_message);
         if (Option.isNone(data)) {
@@ -194,12 +197,16 @@ const continue_chain_fn = (message: Message): ResponseFunction => {
                 created_at: created_at
             }).pipe(Effect.orDie)
         });
-        return yield* send.pipe(Effect.provideService(MessageT, res));
-    }).pipe(Effect.catchAll(e => {
-        if (e instanceof MiddlewareError) {
-            return Effect.fail(e);
+
+        const newMessageChainPromiseEffect = chain_message_promise_as_effect(res, msg_chain_uid as UUID, new_timeout ?? timeout);
+        yield* send.pipe(Effect.provideService(MessageT, res));
+
+        return yield* newMessageChainPromiseEffect;
+    }).pipe(Effect.mapError(e => {
+        if (e instanceof ChainTimeout || e instanceof MiddlewareError) {
+            return e;
         }
 
-        return Effect.fail(new MiddlewareError({ err: e, message }));
+        return new MiddlewareError({ err: e as Error, message });
     }));
 };
