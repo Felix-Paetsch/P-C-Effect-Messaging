@@ -1,10 +1,11 @@
 import { Data, Effect, Equal, Context } from "effect";
 import { AddressT, Address } from "./address";
-import { SerializedMessageT, SerializedMessage, TransmittableMessageT, TransmittableMessage } from "./message";
+import { SerializedMessage, TransmittableMessageT, TransmittableMessage } from "./message";
 import { endpoints, findOrCreateEndpoint } from "./endpoints";
 import { applyMessageProcessingErrorListeners } from "./listen";
 import { recieve, RecieveAddressT } from "./recieve";
 import { CallbackRegistrationError } from "./listen";
+import { MessageTransmissionError } from "./message_transmittion_error";
 
 type InCommunicationChannel = {
     direction: "IN";
@@ -13,7 +14,7 @@ type InCommunicationChannel = {
 }
 type OutCommunicationChannel = {
     direction: "OUT";
-    send: Effect.Effect<void, MessageTransmissionError, TransmittableMessageT>;
+    send: Effect.Effect<void, MessageChannelTransmissionError, TransmittableMessageT>;
     remove_cb?: (remove_effect: Effect.Effect<void, never, never>) => void;
 }
 type InOutCommunicationChannel = {
@@ -37,11 +38,10 @@ export class MessageChannelError extends Data.TaggedError("MessageChannelError")
     try_again: TryNextCommunicationChannelEffect
 }> { }
 
-export class MessageTransmissionError extends Data.TaggedError("MessageTransmissionError")<{ err: Error }> { }
+export class MessageChannelTransmissionError extends Data.TaggedError("cc/MessageChannelTransmissionError")<{ err: Error }> { }
 export class NoValidCommunicationChannelsError extends Data.TaggedError("NoValidCommunicationChannelsError")<{
     address: Address;
 }> { }
-
 
 export const findAllOutCommunicationChannels = (address: Address) => {
     const total_strict_channels: OutCommunicationChannel[] = [];
@@ -87,7 +87,7 @@ export const tryCommunicationChannels =
                 )
             ));
         }).pipe(
-            Effect.catchTag("MessageTransmissionError", (e) => {
+            Effect.catchTag("cc/MessageChannelTransmissionError", (e) => {
                 return Effect.fail(new MessageChannelError({
                     err: e,
                     try_next: tryCommunicationChannels(
