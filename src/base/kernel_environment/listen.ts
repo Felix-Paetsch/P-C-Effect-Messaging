@@ -1,6 +1,6 @@
 import { Data, Effect, Context, Option } from "effect";
-import { Message, MessageT, SerializedMessage, SerializedMessageT } from "./message";
-import { LocalComputedMessageDataT } from "./local_computed_message_data";
+import { Message, MessageT, SerializedMessage, SerializedMessageT } from "../message";
+import { LocalComputedMessageDataT } from "../local_computed_message_data";
 
 export class CallbackRegistrationError extends Data.TaggedError("RegisterChannelError")<{
     err: Error;

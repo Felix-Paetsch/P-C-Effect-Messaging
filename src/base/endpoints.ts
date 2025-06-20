@@ -1,5 +1,5 @@
 import { Address } from "./address";
-import { Equal, Effect, Data } from "effect";
+import { Equal } from "effect";
 import { RegisteredMiddleware } from "./middleware";
 import { CommunicationChannel } from "./communication_channels";
 

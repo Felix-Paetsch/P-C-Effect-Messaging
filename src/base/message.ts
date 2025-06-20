@@ -162,6 +162,10 @@ export class TransmittableMessage {
     content: Effect.Effect<{ [key: string]: Json }, MessageDeserializationError> =
         this.message.pipe(Effect.flatMap(msg => msg.content));
 
+    has_deserialized_message(): boolean {
+        return this.msg instanceof Message;
+    }
+
     get message(): Effect.Effect<Message, MessageDeserializationError> {
         const self = this;
         return Effect.gen(function* (_) {

@@ -1,25 +1,24 @@
 import { Data, Effect, Equal } from "effect";
-import { MessageT, SerializedMessageT } from "./message";
-import { Address, AddressT } from "./address";
+import { MessageT, SerializedMessageT } from "../message";
+import { Address, AddressT } from "../address";
 import { applyListeners } from "./listen";
-import { coreMiddlewareEffect, middlewareEffect, MiddlewareInterrupt } from "./middleware";
-import { findAllOutCommunicationChannels, tryCommunicationChannels } from "./communication_channels";
-import { LocalComputedMessageDataT, sendLocalComputedMessageData } from "./local_computed_message_data";
-import { MessageTransmissionError } from "./message_transmittion_error";
+import { coreMiddlewareEffect, middlewareEffect, MiddlewareInterrupt } from "../middleware";
+import { findAllOutCommunicationChannels, tryCommunicationChannels } from "../communication_channels";
+import { LocalComputedMessageDataT, sendLocalComputedMessageData } from "../local_computed_message_data";
+import { MessageTransmissionError } from "../message_errors";
 
 export class AddressNotFoundError extends Data.TaggedError("AddressNotFoundError")<{
     address: Address;
 }> { }
 
-export const send: Effect.Effect<void, MessageTransmissionError, MessageT> = Effect.gen(function* (_) {
+export const kernel_send: Effect.Effect<void, MessageTransmissionError, MessageT> = Effect.gen(function* (_) {
     const message = yield* _(MessageT);
     const address = message.target;
 
-    const { direction } = yield* _(LocalComputedMessageDataT);
     const communication_channels = findAllOutCommunicationChannels(address);
     const serialized_message = yield* message.serialize();
 
-    const interrupt = yield* coreMiddlewareEffect(direction == "outgoing" ? "MSG_OUT" : "MSG_IN");
+    const interrupt = yield* coreMiddlewareEffect;
     if (interrupt == MiddlewareInterrupt) {
         return yield* _(Effect.void);
     }
@@ -28,7 +27,7 @@ export const send: Effect.Effect<void, MessageTransmissionError, MessageT> = Eff
         return yield* _(applyListeners);
     }
 
-    const interrupt2 = yield* middlewareEffect(direction == "outgoing" ? "MSG_OUT" : "MSG_IN");
+    const interrupt2 = yield* middlewareEffect;
     if (interrupt2 == MiddlewareInterrupt) {
         return yield* _(Effect.void);
     }
@@ -64,4 +63,3 @@ export const send: Effect.Effect<void, MessageTransmissionError, MessageT> = Eff
         })
     )
 );
-

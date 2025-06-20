@@ -2,9 +2,9 @@ import { Effect, Schema, Option, Data, Context } from "effect";
 import { Message, MessageT } from "../base/message";
 import { Address } from "../base/address";
 import { MiddlewareContinue, MiddlewareError, MiddlewareInterrupt } from "../base/middleware";
-import { send } from "../base/send";
 import uuidv4, { UUID } from "../base/uuid";
 import { LocalComputedMessageDataT } from "../base/local_computed_message_data";
+import { EnvironmentT } from "../base/environment";
 
 const bidirectional_message_schema = Schema.Struct({
     source: Address.AddressFromString,
@@ -170,6 +170,8 @@ const respond_fn = (message: Message): ResponseFunction => {
                 created_at: created_at
             }).pipe(Effect.orDie)
         });
+
+        const send = (yield* EnvironmentT).send;
         return yield* send.pipe(Effect.provideService(MessageT, res));
     }).pipe(Effect.catchAll(e => {
         if (e instanceof MiddlewareError) {

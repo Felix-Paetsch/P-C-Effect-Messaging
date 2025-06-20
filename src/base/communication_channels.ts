@@ -1,15 +1,19 @@
-import { Data, Effect, Equal, Context } from "effect";
+import { Data, Effect, Equal, Context, Option, Either } from "effect";
 import { AddressT, Address } from "./address";
 import { SerializedMessage, TransmittableMessageT, TransmittableMessage } from "./message";
 import { endpoints, findOrCreateEndpoint } from "./endpoints";
-import { applyMessageProcessingErrorListeners } from "./listen";
+import { applyMessageProcessingErrorListeners } from "./kernel_environment/listen";
 import { recieve, RecieveAddressT } from "./recieve";
-import { CallbackRegistrationError } from "./listen";
-import { MessageTransmissionError } from "./message_transmittion_error";
+import { CallbackRegistrationError } from "./kernel_environment/listen";
+import { MessageTransmissionError } from "./message_errors";
 
 type InCommunicationChannel = {
     direction: "IN";
-    recieve_cb: (recieve_effect: Effect.Effect<void, never, TransmittableMessageT>) => void;
+    recieve_cb: (recieve_effect: Effect.Effect<
+        Option.Option<MessageTransmissionError>,
+        never,
+        TransmittableMessageT
+    >) => void;
     remove_cb?: (remove_effect: Effect.Effect<void, never, never>) => void;
 }
 type OutCommunicationChannel = {
@@ -19,8 +23,12 @@ type OutCommunicationChannel = {
 }
 type InOutCommunicationChannel = {
     direction: "INOUT";
-    recieve_cb: (recieve_effect: Effect.Effect<void, never, TransmittableMessageT>) => void;
-    send: Effect.Effect<void, MessageTransmissionError, TransmittableMessageT>;
+    recieve_cb: (recieve_effect: Effect.Effect<
+        Option.Option<MessageTransmissionError>,
+        never,
+        TransmittableMessageT
+    >) => void;
+    send: Effect.Effect<void, MessageChannelTransmissionError, TransmittableMessageT>;
     remove_cb?: (remove_effect: Effect.Effect<void, never, never>) => void;
 }
 
@@ -28,6 +36,14 @@ export type CommunicationChannel = InCommunicationChannel | OutCommunicationChan
 export class CommunicationChannelT extends Context.Tag("CommunicationChannelT")<
     CommunicationChannelT, CommunicationChannel
 >() { }
+
+export function isInCommunicationChannel(communicationChannel: CommunicationChannel): communicationChannel is InCommunicationChannel {
+    return communicationChannel.direction == "IN" || communicationChannel.direction == "INOUT";
+}
+
+export function isOutCommunicationChannel(communicationChannel: CommunicationChannel): communicationChannel is OutCommunicationChannel {
+    return communicationChannel.direction == "OUT" || communicationChannel.direction == "INOUT";
+}
 
 export type TryNextCommunicationChannelEffect =
     Effect.Effect<void, NoValidCommunicationChannelsError | MessageChannelError>
@@ -105,9 +121,6 @@ export const tryCommunicationChannels =
             })
         );
 
-
-
-// export class CommunicatorNotFoundError extends Data.TaggedError("CommunicatorNotFoundError")<{}> { }
 const removeChannelEffect = (communicationChannel: CommunicationChannel) =>
     Effect.gen(function* (_) {
         for (const endpoint of endpoints) {
@@ -122,7 +135,6 @@ const removeChannelEffect = (communicationChannel: CommunicationChannel) =>
         }
 
         return yield* _(Effect.void);
-        //return yield* _(Effect.fail(new CommunicatorNotFoundError()));
     });
 
 export const registerCommunicationChannel = Effect.gen(function* (_) {
@@ -147,13 +159,13 @@ export const registerCommunicationChannel = Effect.gen(function* (_) {
         );
     }
 
-    if (communicationChannel.direction == "IN" || communicationChannel.direction == "INOUT") {
+    if (isInCommunicationChannel(communicationChannel)) {
         yield* Effect.try(() => {
-            return (communicationChannel as InCommunicationChannel).recieve_cb(
+            return communicationChannel.recieve_cb(
                 Effect.provideService(recieve, RecieveAddressT, address).pipe(
-                    Effect.catchAll(e => {
-                        return applyMessageProcessingErrorListeners(e)
-                    })
+                    Effect.tapError(e => applyMessageProcessingErrorListeners(e)),
+                    Effect.flip,
+                    Effect.option
                 )
             )
         }).pipe(Effect.catchAll(e => {

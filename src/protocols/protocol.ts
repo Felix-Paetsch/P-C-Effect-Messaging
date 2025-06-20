@@ -1,12 +1,12 @@
 import { Context, Data, Effect, Schema, Equal, Option, pipe } from "effect"
 import { catchAllAsMiddlewareError, Middleware } from "../base/middleware"
-import { chain_middleware, ChainMessageResult, ChainMessageResultT, ChainTimeout, make_message_chain } from "./message_chains"
+import { chain_middleware, ChainMessageResult, ChainMessageResultT, ChainTimeout, make_message_chain } from "../middleware/message_chains"
 import { Address } from "../base/address"
 import { Json, Message, MessageT } from "../base/message";
-import { send } from "../base/send";
 import { onErrorRetryWithOtherCommunicationChannels } from "../tools/on_message_channel_error";
 import { MiddlewareError } from "../base/middleware";
-import { MessageTransmissionError } from "../base/message_transmittion_error";
+import { isMessageTransmissionError, MessageTransmissionError } from "../base/message_errors";
+import { EnvironmentT } from "../base/environment";
 
 export class ProtocolError extends Data.TaggedError("ProtocolError")<{
     message: string;
@@ -14,10 +14,10 @@ export class ProtocolError extends Data.TaggedError("ProtocolError")<{
 }> { }
 
 type ProtocolMessageRespond = (data: Json, is_error?: boolean) =>
-    Effect.Effect<ProtocolMessage, ProtocolError, never>
+    Effect.Effect<ProtocolMessage, ProtocolError, EnvironmentT>
 export type ProtocolMessage = Message & {
     readonly respond: ProtocolMessageRespond,
-    readonly respond_error: (error: Error) => Effect.Effect<never, ProtocolError, never>,
+    readonly respond_error: (error: Error) => Effect.Effect<never, ProtocolError, EnvironmentT>,
     content: Effect.Effect<{ [key: string]: Json } & { data: Json }, never, never>
 }
 
@@ -54,7 +54,7 @@ export class Protocol<SenderResult, ReceiverResult> {
         = Effect.fail(Protocol.not_implemented_error)
 
     protected send_first_message(address: Address, data: Json, timeout: number = 5000):
-        Effect.Effect<ProtocolMessage, MessageTransmissionError | ChainTimeout, never> {
+        Effect.Effect<ProtocolMessage, MessageTransmissionError | ChainTimeout, EnvironmentT> {
         const self = this;
 
         return Effect.gen(function* (_) {
@@ -64,6 +64,7 @@ export class Protocol<SenderResult, ReceiverResult> {
 
             self.set_protocol_meta_data(message)
             const responseE = make_message_chain(message, timeout)
+            const send = (yield* EnvironmentT).send;
             return yield* Effect.all([
                 send.pipe(
                     Effect.provideService(
@@ -76,7 +77,13 @@ export class Protocol<SenderResult, ReceiverResult> {
             ]).pipe(
                 Effect.andThen(([_, response]) => response),
                 Effect.andThen((response) => self.to_protocol_message(response)),
-                Effect.orDie
+                Effect.mapError(e => {
+                    if (isMessageTransmissionError(e) || e instanceof ChainTimeout) {
+                        return e;
+                    }
+
+                    return new MiddlewareError({ err: e, message: message })
+                })
             )
         })
     }
@@ -180,7 +187,7 @@ export class Protocol<SenderResult, ReceiverResult> {
         message.meta_data.protocol = this.protocol_meta_data
     }
 
-    run(address: Address, data: JSON): Effect.Effect<SenderResult, ProtocolError, never> {
+    run(address: Address, data: Json): Effect.Effect<SenderResult, ProtocolError, EnvironmentT> {
         return Effect.fail(Protocol.not_implemented_error)
     }
 

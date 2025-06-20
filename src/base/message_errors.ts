@@ -1,7 +1,7 @@
 import { MessageChannelError, NoValidCommunicationChannelsError } from "./communication_channels";
-import { MessageSerializationError } from "./message";
+import { MessageDeserializationError, MessageSerializationError } from "./message";
 import { MiddlewareError } from "./middleware";
-import { AddressNotFoundError } from "./send";
+import { AddressNotFoundError } from "./kernel_environment/send";
 
 export type MessageTransmissionError =
     MiddlewareError
@@ -9,11 +9,13 @@ export type MessageTransmissionError =
     | AddressNotFoundError
     | MessageChannelError
     | NoValidCommunicationChannelsError
+    | MessageDeserializationError
 
 export function isMessageTransmissionError(e: Error): e is MessageTransmissionError {
     return e instanceof MiddlewareError ||
         e instanceof MessageSerializationError ||
         e instanceof AddressNotFoundError ||
         e instanceof MessageChannelError ||
-        e instanceof NoValidCommunicationChannelsError
+        e instanceof NoValidCommunicationChannelsError ||
+        e instanceof MessageDeserializationError
 }

@@ -3,9 +3,9 @@ import { MessageT } from "./message";
 import { Address } from "./address";
 
 export type LocalComputedMessageData = {
-    direction: "incomming" | "outgoing";
-    // The path to Kernel is "incomming" the path out from the kernel is "outgoing"
-    // If the message is for the kernel at the kernel it is "incomming", else at the kernel it is "outgoing"
+    direction: "incoming" | "outgoing";
+    // The path to Kernel is "incoming" the path out from the kernel is "outgoing"
+    // If the message is for the kernel at the kernel it is "incoming", else at the kernel it is "outgoing"
     at_target: boolean;
     // Whether the current AddressHandler is the final target of the message
     // If not overwritten by a middleware, this is true only at the kernel if the message is for the kernel
@@ -22,7 +22,7 @@ export class LocalComputedMessageDataT extends Context.Tag("LocalComputedMessage
 export const justSentLocalComputedMessageData = Effect.gen(function* (_) {
     const message = yield* _(MessageT);
     return {
-        direction: Equal.equals(message.target, Address.local_address) ? "incomming" : "outgoing",
+        direction: Equal.equals(message.target, Address.local_address) ? "incoming" : "outgoing",
         at_target: Equal.equals(message.target, Address.local_address)
     } as LocalComputedMessageData;
 })
@@ -33,7 +33,7 @@ const sendRecievedLocalComputedMessageData = Effect.gen(function* (_) {
     const message = yield* _(MessageT);
     const computed_data = yield* _(LocalComputedMessageDataT);
     computed_data.direction = Equal.equals(message.target, Address.local_address)
-        ? "incomming" : "outgoing";
+        ? "incoming" : "outgoing";
     return computed_data;
 })
 
@@ -56,7 +56,7 @@ export const sendLocalComputedMessageData = Effect.gen(function* (_) {
 export const justRecievedLocalComputedMessageData = Effect.gen(function* (_) {
     const message = yield* _(MessageT);
     const res: LocalComputedMessageData = {
-        direction: "incomming",
+        direction: "incoming",
         at_target: false
     };
     return res;

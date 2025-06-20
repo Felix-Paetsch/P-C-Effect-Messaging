@@ -2,9 +2,9 @@ import { Effect, Schema, Option, Data, Context } from "effect";
 import { Json, Message, MessageT } from "../base/message";
 import { Address } from "../base/address";
 import { MiddlewareContinue, MiddlewareError, MiddlewareInterrupt } from "../base/middleware";
-import { send } from "../base/send";
 import uuidv4, { UUID } from "../base/uuid";
 import { LocalComputedMessageDataT } from "../base/local_computed_message_data";
+import { EnvironmentT } from "../base/environment";
 
 const chain_message_schema = Schema.Struct({
     current_sender: Address.AddressFromString,
@@ -26,7 +26,7 @@ export type ChainMessageResult = {
     respond: ResponseFunction
 }
 
-export type ChainContinueEffect = Effect.Effect<ChainMessageResult, MiddlewareError | ChainTimeout, never>;
+export type ChainContinueEffect = Effect.Effect<ChainMessageResult, MiddlewareError | ChainTimeout, EnvironmentT>;
 export type ResponseFunction = (content: { [key: string]: Json }, meta_data: { [key: string]: any }, new_timeout?: number) => ChainContinueEffect;
 export class ResponseFunctionT extends Context.Tag("ResponseFunctionT")<
     ResponseFunctionT,
@@ -199,6 +199,7 @@ const continue_chain_fn = (message: Message): ResponseFunction => {
         });
 
         const newMessageChainPromiseEffect = chain_message_promise_as_effect(res, msg_chain_uid as UUID, new_timeout ?? timeout);
+        const send = (yield* EnvironmentT).send;
         yield* send.pipe(Effect.provideService(MessageT, res));
 
         return yield* newMessageChainPromiseEffect;

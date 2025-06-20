@@ -1,14 +1,14 @@
 import { Context, Effect, pipe } from "effect";
 import { MessageT, TransmittableMessageT } from "./message";
 import { Address, AddressT } from "./address";
-import { send } from "./send";
+import { KernelEnv } from "./kernel_environment/index";
 import { middlewareEffect, MiddlewareInterrupt } from "./middleware";
 import { LocalComputedMessageDataT, justRecievedLocalComputedMessageData } from "./local_computed_message_data";
 
 export class RecieveAddressT extends Context.Tag("RecieveAddressT")<RecieveAddressT, Address>() { }
 
 export const recieve = pipe(
-    middlewareEffect("MSG_IN"),
+    middlewareEffect,
     Effect.provideServiceEffect(
         AddressT,
         RecieveAddressT
@@ -22,7 +22,7 @@ export const recieve = pipe(
         if (interrupt == MiddlewareInterrupt) {
             return yield* _(Effect.void);
         } else {
-            return yield* send;
+            return yield* KernelEnv.send;
         }
     }),
     Effect.provideServiceEffect(
