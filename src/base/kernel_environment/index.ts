@@ -4,7 +4,7 @@ import { Environment } from "../environment";
 import { Middleware, MiddlewareConfT, useMiddleware } from "../middleware";
 import { kernel_send } from "./send";
 
-export const KernelEnv: Environment = {
+export const KernelEnv = {
     ownAddress: Address.local_address,
     send: kernel_send,
     remove: Effect.void,
@@ -14,4 +14,4 @@ export const KernelEnv: Environment = {
             address: Address.local_address
         })
     )
-}
+} satisfies Environment;

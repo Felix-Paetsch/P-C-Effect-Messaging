@@ -9,8 +9,14 @@ export class PingProtocol extends Protocol<Either.Either<true, ProtocolError>, v
     }
 
     run(address: Address) {
-        return this.send_first_message(address, "Ping").pipe(
-            Effect.as(true as const),
+        const self = this;
+        return Effect.gen(function* (_) {
+            const res = yield* self.send_first_message(address, "Ping")
+
+            return yield* res.pipe(
+                Effect.as(true as const)
+            )
+        }).pipe(
             Effect.mapError(e => {
                 if (e instanceof ProtocolError) {
                     return e
@@ -26,6 +32,10 @@ export class PingProtocol extends Protocol<Either.Either<true, ProtocolError>, v
 
     protected on_first_request = Effect.gen(function* (_) {
         const msg = yield* _(ProtocolMessageT);
-        msg.respond("Pong")
+        yield* msg.respond("Pong").pipe(
+            Effect.ignore
+        );
     })
 }
+
+export const Ping = new PingProtocol();

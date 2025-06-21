@@ -32,16 +32,17 @@ export const make_message_bidirectional = (
     timeout: number = 5000
 ) => Effect.gen(function* (_) {
     const msg_uuid = uuidv4();
+    const env = yield* _(EnvironmentT);
 
     message.meta_data.bidirectional_message = yield* _(Schema.encode(bidirectional_message_schema)({
-        source: Address.local_address,
+        source: env.ownAddress,
         target: message.target,
         msg_uuid: msg_uuid,
         timeout: timeout,
         created_at: new Date()
     }).pipe(Effect.orDie));
 
-    return yield* bidirectional_message_promise_as_effect(message, msg_uuid, timeout);
+    return bidirectional_message_promise_as_effect(message, msg_uuid, timeout);
 });
 
 const message_queue: {

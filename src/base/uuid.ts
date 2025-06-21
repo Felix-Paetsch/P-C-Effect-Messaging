@@ -6,3 +6,7 @@ export default function uuidv4(): UUID {
         return v.toString(16);
     }) as UUID;
 }
+
+export function asUUID(uuid: string): UUID {
+    return uuid as UUID;
+}

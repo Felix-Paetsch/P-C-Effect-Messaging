@@ -1,9 +1,8 @@
 import { Effect, Context, Data } from "effect";
-import { Address, AddressT } from "./address";
-import { findOrCreateEndpoint } from "./endpoints";
-import { MessageT } from "./message";
+import { Address } from "./address";
+import { findEndpoint } from "./endpoints";
+import { MessageT, Message } from "./message";
 import { LocalComputedMessageDataT } from "./local_computed_message_data";
-import { Message } from "./message";
 
 export class MiddlewareError extends Data.TaggedError("MiddlewareError")<{ err: Error, message: Message }> { }
 
@@ -14,10 +13,6 @@ export const MiddlewareInterrupt: MiddlewareInterrupt = { __brand: "MiddlewareIn
 export const MiddlewareContinue: MiddlewareContinue = { __brand: "MiddlewareContinue" } as MiddlewareContinue;
 
 export type Middleware = Effect.Effect<MiddlewarePassthrough, MiddlewareError, MessageT | LocalComputedMessageDataT>;
-
-export type RegisteredMiddleware = {
-    middleware: Middleware;
-};
 
 export type MiddlewareConf = {
     readonly middleware: Middleware;
@@ -35,11 +30,9 @@ export const useMiddleware = Effect.gen(function* (_) {
         address
     } = yield* _(MiddlewareConfT);
 
-    const endpoint = findOrCreateEndpoint(address);
+    const endpoint = yield* _(findEndpoint(address));
 
-    endpoint.middlewares.push({
-        middleware
-    });
+    endpoint.middlewares.push(middleware);
 
     return yield* _(Effect.void);
 });
@@ -51,26 +44,3 @@ export const catchAllAsMiddlewareError = Effect.catchAll((error: Error) => Effec
         message
     }))
 }))
-
-export const middlewareEffect =
-    Effect.gen(function* (_) {
-        const address = yield* _(AddressT);
-        const endpoint = findOrCreateEndpoint(address);
-
-        const relevant_middleware = endpoint.middlewares.map(m => m.middleware);
-
-        for (const middleware of relevant_middleware) {
-            const interrupt = yield* _(middleware);
-            if (interrupt == MiddlewareInterrupt) {
-                return interrupt;
-            }
-        }
-
-        return yield* _(Effect.void);
-    });
-
-export const coreMiddlewareEffect = Effect.provideService(
-    middlewareEffect,
-    AddressT,
-    Address.local_address
-);

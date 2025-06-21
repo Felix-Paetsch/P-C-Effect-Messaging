@@ -1,6 +1,6 @@
 import { Context, Data, Effect, ParseResult, pipe, Schema } from "effect";
 import { Address } from "./address";
-import { CommunicationChannel } from "./communication_channels";
+import { CommunicationChannel } from "./communication_channel";
 
 export class MessageT extends Context.Tag("MessageT")<
     MessageT,
@@ -32,8 +32,7 @@ export class Message {
     constructor(
         public target: Address, // | Communicator,
         content: string | { [key: string]: Json },
-        public meta_data: { [key: string]: Json } = {},
-        public prefered_communication_channel: CommunicationChannel | null = null
+        public meta_data: { [key: string]: Json } = {}
     ) {
         if (typeof content === "string") {
             this.msg_content = { serialized: content, deserialized: null };

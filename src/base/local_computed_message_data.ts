@@ -60,4 +60,16 @@ export const justRecievedLocalComputedMessageData = Effect.gen(function* (_) {
         at_target: false
     };
     return res;
-})
+});
+
+export const localComputedMessageDataWithUpdates = (updates: Partial<LocalComputedMessageData>) =>
+    <A, B, C>(program: Effect.Effect<A, B, C>) => Effect.provideServiceEffect(
+        program,
+        LocalComputedMessageDataT,
+        Effect.gen(
+            function* (_) {
+                const data = yield* _(LocalComputedMessageDataT);
+                return { ...data, ...updates };
+            }
+        )
+    )

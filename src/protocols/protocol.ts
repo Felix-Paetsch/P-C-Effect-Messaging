@@ -3,10 +3,9 @@ import { catchAllAsMiddlewareError, Middleware } from "../base/middleware"
 import { chain_middleware, ChainMessageResult, ChainMessageResultT, ChainTimeout, make_message_chain } from "../middleware/message_chains"
 import { Address } from "../base/address"
 import { Json, Message, MessageT } from "../base/message";
-import { onErrorRetryWithOtherCommunicationChannels } from "../tools/on_message_channel_error";
 import { MiddlewareError } from "../base/middleware";
 import { isMessageTransmissionError, MessageTransmissionError } from "../base/message_errors";
-import { EnvironmentT } from "../base/environment";
+import { Environment, EnvironmentInactiveError, EnvironmentT } from "../base/environment";
 
 export class ProtocolError extends Data.TaggedError("ProtocolError")<{
     message: string;
@@ -14,7 +13,11 @@ export class ProtocolError extends Data.TaggedError("ProtocolError")<{
 }> { }
 
 type ProtocolMessageRespond = (data: Json, is_error?: boolean) =>
-    Effect.Effect<ProtocolMessage, ProtocolError, EnvironmentT>
+    Effect.Effect<
+        Effect.Effect<ProtocolMessage, ProtocolError>,
+        MessageTransmissionError,
+        never
+    >
 export type ProtocolMessage = Message & {
     readonly respond: ProtocolMessageRespond,
     readonly respond_error: (error: Error) => Effect.Effect<never, ProtocolError, EnvironmentT>,
@@ -54,7 +57,12 @@ export class Protocol<SenderResult, ReceiverResult> {
         = Effect.fail(Protocol.not_implemented_error)
 
     protected send_first_message(address: Address, data: Json, timeout: number = 5000):
-        Effect.Effect<ProtocolMessage, MessageTransmissionError | ChainTimeout, EnvironmentT> {
+        Effect.Effect<
+            Effect.Effect<ProtocolMessage, ProtocolError, EnvironmentT>,
+            MessageTransmissionError | ChainTimeout | EnvironmentInactiveError,
+            EnvironmentT
+        > {
+
         const self = this;
 
         return Effect.gen(function* (_) {
@@ -63,32 +71,32 @@ export class Protocol<SenderResult, ReceiverResult> {
             });
 
             self.set_protocol_meta_data(message)
-            const responseE = make_message_chain(message, timeout)
+            const responseE = yield* make_message_chain(message, timeout)
             const send = (yield* EnvironmentT).send;
-            return yield* Effect.all([
-                send.pipe(
-                    Effect.provideService(
-                        MessageT,
-                        message
-                    ),
-                    onErrorRetryWithOtherCommunicationChannels
-                ),
-                responseE
-            ]).pipe(
-                Effect.andThen(([_, response]) => response),
+            yield* send.pipe(
+                Effect.provideService(
+                    MessageT,
+                    message
+                )
+            )
+
+            return responseE.pipe(
                 Effect.andThen((response) => self.to_protocol_message(response)),
                 Effect.mapError(e => {
-                    if (isMessageTransmissionError(e) || e instanceof ChainTimeout) {
+                    if (e instanceof ProtocolError) {
                         return e;
                     }
 
-                    return new MiddlewareError({ err: e, message: message })
+                    return new ProtocolError({
+                        message: "Protocol error",
+                        error: e
+                    })
                 })
             )
         })
     }
 
-    protected to_protocol_message(res: ChainMessageResult): Effect.Effect<ProtocolMessage, ProtocolError, never> {
+    protected to_protocol_message(res: ChainMessageResult): Effect.Effect<ProtocolMessage, ProtocolError, EnvironmentT> {
         const msg = res.message;
         const self = this;
 
@@ -125,30 +133,35 @@ export class Protocol<SenderResult, ReceiverResult> {
                 }));
             }
 
+            const env = yield* _(EnvironmentT);
             const respond: ProtocolMessageRespond = (data, is_error = false) => {
-                return res.respond({ data }, { ...self.protocol_meta_data, is_error }).pipe(
-                    Effect.andThen(message => self.to_protocol_message(message)),
-                    Effect.mapError(e => {
-                        if (e instanceof ProtocolError) {
-                            return e;
-                        }
-                        if (e instanceof ChainTimeout) {
-                            return new ProtocolError({
-                                message: "Protocol timeout",
-                                error: e
-                            })
-                        }
-                        if (e instanceof MiddlewareError) {
-                            return new ProtocolError({
-                                message: "Middleware error",
-                                error: e
-                            })
-                        }
-                        return new ProtocolError({
-                            message: "Protocol error",
-                            error: e as Error
-                        })
-                    })
+                return res.respond({ data }, {
+                    protocol: {
+                        ...self.protocol_meta_data, is_error
+                    }
+                }).pipe(
+                    Effect.andThen(responseEffect =>
+                        Effect.succeed(responseEffect.pipe(
+                            Effect.andThen(message => self.to_protocol_message(message)),
+                            Effect.mapError(e => {
+                                if (e instanceof ProtocolError) {
+                                    return e;
+                                }
+                                if (e instanceof ChainTimeout) {
+                                    return new ProtocolError({
+                                        message: "Protocol timeout",
+                                        error: e
+                                    })
+                                }
+                                return new ProtocolError({
+                                    message: "Protocol error",
+                                    error: e as Error
+                                })
+                            }),
+                            Effect.provideService(EnvironmentT, env)
+                        ))
+                    ),
+                    Effect.provideService(EnvironmentT, env)
                 )
             }
 
@@ -164,13 +177,12 @@ export class Protocol<SenderResult, ReceiverResult> {
                     }, true).pipe(Effect.ignore))
                 );
 
-            const protocolMessage: ProtocolMessage = Object.assign(msg, {
+            const protocolMessage = Object.assign(msg, {
                 respond,
-                respond_error,
-                content: Effect.succeed(content as { [key: string]: Json } & { data: Json })
+                respond_error
             });
 
-            return protocolMessage;
+            return protocolMessage as ProtocolMessage;
         });
     }
 
@@ -201,30 +213,32 @@ export class Protocol<SenderResult, ReceiverResult> {
             Effect.option
         )
 
-    middleware(): Middleware {
+    middleware(env: Environment): Effect.Effect<Middleware, never, never> {
         const self = this;
-        const on_first_request = this.on_first_request.pipe(
-            Effect.provideServiceEffect(ProtocolMessageT,
-                ChainMessageResultT.pipe(
-                    Effect.andThen(result => self.to_protocol_message(result))
-                )
-            ),
-            catchAllAsMiddlewareError
-        )
+        return Effect.gen(function* (_) {
+            const on_first_request = self.on_first_request.pipe(
+                Effect.provideServiceEffect(ProtocolMessageT,
+                    ChainMessageResultT.pipe(
+                        Effect.andThen(result => self.to_protocol_message(result))
+                    )
+                ),
+                catchAllAsMiddlewareError
+            )
 
-        return chain_middleware(
-            on_first_request,
-            Effect.never,
-            Effect.gen(function* (_) {
-                const message = yield* _(MessageT);
-                const meta_data = message.meta_data;
-                const protocol_meta_data = yield* Protocol.get_protocol_meta_data(meta_data);
-                if (Option.isNone(protocol_meta_data)) {
-                    return false
-                }
+            return chain_middleware(
+                on_first_request.pipe(Effect.provideService(EnvironmentT, env)),
+                Effect.void,
+                Effect.gen(function* (_) {
+                    const message = yield* _(MessageT);
+                    const meta_data = message.meta_data;
+                    const protocol_meta_data = yield* Protocol.get_protocol_meta_data(meta_data);
+                    if (Option.isNone(protocol_meta_data)) {
+                        return false
+                    }
 
-                return Equal.equals(protocol_meta_data.value, self.protocol_meta_data)
-            })
-        )
+                    return Equal.equals(protocol_meta_data.value, self.protocol_meta_data)
+                })
+            )
+        })
     }
 }

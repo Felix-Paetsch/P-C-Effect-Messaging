@@ -2,10 +2,12 @@ import { Data, Effect, Equal } from "effect";
 import { MessageT, SerializedMessageT } from "../message";
 import { Address, AddressT } from "../address";
 import { applyListeners } from "./listen";
-import { coreMiddlewareEffect, middlewareEffect, MiddlewareInterrupt } from "../middleware";
-import { findAllOutCommunicationChannels, tryCommunicationChannels } from "../communication_channels";
-import { LocalComputedMessageDataT, sendLocalComputedMessageData } from "../local_computed_message_data";
+import { applyMiddlewareEffect } from "../apply_middleware_effect";
+import { MiddlewareInterrupt } from "../middleware";
+import { sendThroughCommunicationChannel } from "../communication_channel";
+import { LocalComputedMessageDataT, localComputedMessageDataWithUpdates, sendLocalComputedMessageData } from "../local_computed_message_data";
 import { MessageTransmissionError } from "../message_errors";
+import { findEndpoint } from "../endpoints";
 
 export class AddressNotFoundError extends Data.TaggedError("AddressNotFoundError")<{
     address: Address;
@@ -13,12 +15,13 @@ export class AddressNotFoundError extends Data.TaggedError("AddressNotFoundError
 
 export const kernel_send: Effect.Effect<void, MessageTransmissionError, MessageT> = Effect.gen(function* (_) {
     const message = yield* _(MessageT);
+    console.log(message);
     const address = message.target;
 
-    const communication_channels = findAllOutCommunicationChannels(address);
+    const endpoint = yield* _(findEndpoint(address));
     const serialized_message = yield* message.serialize();
 
-    const interrupt = yield* coreMiddlewareEffect;
+    const interrupt = yield* applyMiddlewareEffect;
     if (interrupt == MiddlewareInterrupt) {
         return yield* _(Effect.void);
     }
@@ -27,25 +30,20 @@ export const kernel_send: Effect.Effect<void, MessageTransmissionError, MessageT
         return yield* _(applyListeners);
     }
 
-    const interrupt2 = yield* middlewareEffect;
+    const interrupt2 = yield* applyMiddlewareEffect.pipe(
+        localComputedMessageDataWithUpdates({
+            direction: "outgoing",
+            at_target: false
+        })
+    );
+
     if (interrupt2 == MiddlewareInterrupt) {
         return yield* _(Effect.void);
     }
 
-    if (message.prefered_communication_channel) {
-        const pc = message.prefered_communication_channel as any;
-        if (pc.send) {
-            communication_channels.unshift(pc.prefered_communication_channel);
-        }
-    }
-
-    if (communication_channels.length == 0) {
-        return yield* _(Effect.fail(new AddressNotFoundError({ address })));
-    }
-
     return yield* _(
         Effect.provideService(
-            tryCommunicationChannels(communication_channels, serialized_message, address),
+            sendThroughCommunicationChannel(endpoint.communicationChannel, serialized_message, address),
             SerializedMessageT,
             serialized_message
         )
