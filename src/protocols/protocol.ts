@@ -3,8 +3,7 @@ import { catchAllAsMiddlewareError, Middleware } from "../base/middleware"
 import { chain_middleware, ChainMessageResult, ChainMessageResultT, ChainTimeout, make_message_chain } from "../middleware/message_chains"
 import { Address } from "../base/address"
 import { Json, Message, MessageT } from "../base/message";
-import { MiddlewareError } from "../base/middleware";
-import { isMessageTransmissionError, MessageTransmissionError } from "../base/errors/message_errors";
+import { MessageTransmissionError } from "../base/errors/message_errors";
 import { Environment, EnvironmentInactiveError, EnvironmentT } from "../base/environment";
 
 export class ProtocolError extends Data.TaggedError("ProtocolError")<{
@@ -53,9 +52,11 @@ export class Protocol<SenderResult, ReceiverResult> {
         Effect.andThen(content => content.data)
     );
 
+    // Will be called if the first message reaches its target on the other side
     protected on_first_request: Effect.Effect<void, ProtocolError, ProtocolMessageT>
         = Effect.fail(Protocol.not_implemented_error)
 
+    // Send the first message
     protected send_first_message(address: Address, data: Json, timeout: number = 5000):
         Effect.Effect<
             Effect.Effect<ProtocolMessage, ProtocolError, EnvironmentT>,
@@ -199,10 +200,12 @@ export class Protocol<SenderResult, ReceiverResult> {
         message.meta_data.protocol = this.protocol_meta_data
     }
 
+    /** Run the protocol	with some data */
     run(address: Address, data: Json): Effect.Effect<SenderResult, ProtocolError, EnvironmentT> {
         return Effect.fail(Protocol.not_implemented_error)
     }
 
+    /** Will be called on the target if the protocol finished */
     on(result: ReceiverResult): Effect.Effect<void, never, never> {
         return Effect.void
     }
@@ -213,6 +216,7 @@ export class Protocol<SenderResult, ReceiverResult> {
             Effect.option
         )
 
+    /** The middleware to register on both sides to make this work */
     middleware(env: Environment): Effect.Effect<Middleware, never, never> {
         const self = this;
         return Effect.gen(function* (_) {

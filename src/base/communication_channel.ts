@@ -44,13 +44,17 @@ export const registerCommunicationChannel = Effect.gen(function* (_) {
     const ep = yield* createEndpoint(communicationChannel);
 
     yield* Effect.try(() => {
-        return communicationChannel.recieve_cb(
+        communicationChannel.recieve_cb(
             Effect.provideService(recieve, RecieveAddressT, address).pipe(
                 Effect.tapError(e => applyMessageProcessingErrorListeners(e)),
                 Effect.flip,
                 Effect.option
             )
-        )
+        );
+
+        if (typeof communicationChannel.remove_cb == "function") {
+            communicationChannel.remove_cb(ep.remove);
+        }
     }).pipe(Effect.catchAll(e => {
         const err = e instanceof Error ? e : new Error("Couldn't register receive callback");
         return Effect.all([

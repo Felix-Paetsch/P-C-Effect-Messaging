@@ -1,7 +1,7 @@
-import { Effect, Schema, Option, Data, Context } from "effect";
+import { Effect, Schema, Data, Context } from "effect";
 import { Json, Message, MessageT } from "../base/message";
 import { Address } from "../base/address";
-import { MiddlewareContinue, MiddlewareError, MiddlewareInterrupt } from "../base/middleware";
+import { Middleware, MiddlewareContinue, MiddlewareError, MiddlewareInterrupt } from "../base/middleware";
 import { v4 as uuidv4 } from 'uuid';
 import { LocalComputedMessageDataT } from "../base/local_computed_message_data";
 import { EnvironmentT } from "../base/environment";
@@ -46,17 +46,13 @@ export class ResponseFunctionT extends Context.Tag("ResponseFunctionT")<
     ResponseFunction
 >() { }
 
-
-
 const chain_queue: {
     [key: string]: {
         last_message: Message,
         resolve: (res: ChainMessageResult) => void,
-        reject: (error: Error) => void
+        reject: (error: ChainTimeout) => void
     }
 } = {};
-
-
 
 export const make_message_chain = (
     message: Message,
@@ -103,7 +99,7 @@ const chain_message_promise = (message: Message, chain_uid: string, timeout: num
                 resolve(res);
                 delete chain_queue[key];
             },
-            reject: (error: Error) => {
+            reject: (error: ChainTimeout) => {
                 reject(error);
                 delete chain_queue[key];
             }
@@ -205,3 +201,34 @@ const continue_chain_fn = (message: Message): ResponseFunction => {
         return chain_message_promise_as_effect(res, msg_chain_uid, new_timeout ?? timeout);
     });
 }
+
+export const id_chain_middleware = (
+    on_first_request: Effect.Effect<void, MiddlewareError, MessageT | ResponseFunctionT | ChainMessageResultT | LocalComputedMessageDataT>,
+    process_message: Effect.Effect<void, MiddlewareError, MessageT | ResponseFunctionT | ChainMessageResultT | LocalComputedMessageDataT>,
+    id: string
+): Middleware & {
+    make_message_chain: (message: Message) => Effect.Effect<Message, ChainTimeout, EnvironmentT>
+} => {
+    const mw = chain_middleware(
+        on_first_request,
+        process_message,
+        Effect.gen(function* (_) {
+            const message = yield* _(MessageT);
+            return (message.meta_data as any).chain_message?.chain_middleware_id === id;
+        })
+    );
+
+    const make_id_chain_message = (message: Message) => {
+        const r = make_message_chain(message);
+        const chain_message = (message.meta_data as any).chain_message;
+        if (typeof chain_message === "object" && chain_message !== null) {
+            chain_message.chain_middleware_id = id;
+        }
+        return r;
+    }
+
+    (mw as any).make_message_chain = make_id_chain_message;
+    return mw as Middleware & {
+        make_message_chain: (message: Message) => Effect.Effect<Message, ChainTimeout, EnvironmentT>
+    };
+} 
