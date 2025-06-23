@@ -37,10 +37,10 @@ export const useMiddleware = Effect.gen(function* (_) {
     return yield* _(Effect.void);
 });
 
-export const catchAllAsMiddlewareError = Effect.mapError((err: Error) => Effect.gen(function* (_) {
+export const catchAllAsMiddlewareError = Effect.catchAll((error: Error) => Effect.gen(function* (_) {
     const message = yield* _(MessageT);
     return yield* Effect.fail(new MiddlewareError({
-        err,
+        err: error,
         message
     }))
 }))
