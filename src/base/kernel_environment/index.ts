@@ -12,6 +12,7 @@ export const KernelEnv = {
         Effect.provideService(MiddlewareConfT, {
             middleware: middleware,
             address: Address.local_address
-        })
+        }),
+        Effect.orDie
     )
 } satisfies Environment;

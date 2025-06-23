@@ -4,8 +4,8 @@ import { SerializedMessage, TransmittableMessageT, TransmittableMessage } from "
 import { createEndpoint } from "./endpoints";
 import { applyMessageProcessingErrorListeners } from "./kernel_environment/listen";
 import { recieve, RecieveAddressT } from "./recieve";
-import { CallbackRegistrationError } from "./kernel_environment/listen";
-import { MessageTransmissionError } from "./message_errors";
+import { MessageTransmissionError } from "./errors/message_errors";
+import { CallbackRegistrationError } from "./errors/callback_registration";
 
 export type CommunicationChannel = {
     address: Address;
@@ -28,13 +28,12 @@ export class AddressAlreadyInUseError extends Data.TaggedError("AddressAlreadyIn
 
 export const sendThroughCommunicationChannel = (
     channel: CommunicationChannel,
-    serialized_message: string,
-    address: Address
+    serialized_message: string
 ): Effect.Effect<void, MessageChannelTransmissionError> => {
     return Effect.provideService(
         channel.send,
         TransmittableMessageT,
-        new TransmittableMessage(serialized_message as SerializedMessage, address)
+        new TransmittableMessage(serialized_message as SerializedMessage, channel.address)
     );
 }
 

@@ -1,8 +1,8 @@
-import { AddressAlreadyInUseError, MessageChannelTransmissionError } from "./communication_channel";
-import { MessageDeserializationError, MessageSerializationError } from "./message";
-import { MiddlewareError } from "./middleware";
-import { AddressNotFoundError } from "./kernel_environment/send";
-import { EnvironmentInactiveError } from "./environment";
+import { AddressAlreadyInUseError, MessageChannelTransmissionError } from "../communication_channel";
+import { MessageDeserializationError, MessageSerializationError } from "../message";
+import { MiddlewareError } from "../middleware";
+import { AddressNotFoundError } from "../kernel_environment/send";
+import { EnvironmentInactiveError } from "../environment";
 
 export type MessageTransmissionError =
     MiddlewareError

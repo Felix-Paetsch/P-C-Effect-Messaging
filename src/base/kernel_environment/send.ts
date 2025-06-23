@@ -1,4 +1,4 @@
-import { Data, Effect, Equal } from "effect";
+import { Data, Effect, Equal, pipe } from "effect";
 import { MessageT, SerializedMessageT } from "../message";
 import { Address, AddressT } from "../address";
 import { applyListeners } from "./listen";
@@ -6,7 +6,7 @@ import { applyMiddlewareEffect } from "../apply_middleware_effect";
 import { MiddlewareInterrupt } from "../middleware";
 import { sendThroughCommunicationChannel } from "../communication_channel";
 import { LocalComputedMessageDataT, localComputedMessageDataWithUpdates, sendLocalComputedMessageData } from "../local_computed_message_data";
-import { MessageTransmissionError } from "../message_errors";
+import { MessageTransmissionError } from "../errors/message_errors";
 import { findEndpoint } from "../endpoints";
 
 export class AddressNotFoundError extends Data.TaggedError("AddressNotFoundError")<{
@@ -42,10 +42,12 @@ export const kernel_send: Effect.Effect<void, MessageTransmissionError, MessageT
     }
 
     return yield* _(
-        Effect.provideService(
-            sendThroughCommunicationChannel(endpoint.communicationChannel, serialized_message, address),
-            SerializedMessageT,
-            serialized_message
+        pipe(
+            sendThroughCommunicationChannel(endpoint.communicationChannel, serialized_message),
+            Effect.provideService(
+                SerializedMessageT,
+                serialized_message
+            )
         )
     );
 }).pipe(

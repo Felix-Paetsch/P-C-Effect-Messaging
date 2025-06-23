@@ -4,7 +4,7 @@ import { chain_middleware, ChainMessageResult, ChainMessageResultT, ChainTimeout
 import { Address } from "../base/address"
 import { Json, Message, MessageT } from "../base/message";
 import { MiddlewareError } from "../base/middleware";
-import { isMessageTransmissionError, MessageTransmissionError } from "../base/message_errors";
+import { isMessageTransmissionError, MessageTransmissionError } from "../base/errors/message_errors";
 import { Environment, EnvironmentInactiveError, EnvironmentT } from "../base/environment";
 
 export class ProtocolError extends Data.TaggedError("ProtocolError")<{

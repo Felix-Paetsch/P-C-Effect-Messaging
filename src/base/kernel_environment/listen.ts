@@ -1,17 +1,12 @@
 import { Data, Effect, Context, Option } from "effect";
 import { Message, MessageT, SerializedMessage, SerializedMessageT } from "../message";
 import { LocalComputedMessageDataT } from "../local_computed_message_data";
-
-export class CallbackRegistrationError extends Data.TaggedError("RegisterChannelError")<{
-    err: Error;
-}> { }
-
-class ListenerNotFoundError extends Data.TaggedError("ListenerNotFoundError")<{}> { }
+import { CallbackRegistrationError } from "../errors/callback_registration";
 
 export type ListenerEffect = Effect.Effect<void, never, MessageT | LocalComputedMessageDataT>
 export class ListenerT extends Context.Tag("ListenerT")<ListenerT, {
     listen: ListenerEffect,
-    remove_cb?: (remove_effect: Effect.Effect<void, ListenerNotFoundError, void>) => void;
+    remove_cb?: (remove_effect: Effect.Effect<void, never, never>) => void;
 }>() { }
 
 const registered_listeners: ListenerEffect[] = [];
@@ -19,7 +14,7 @@ const registered_listeners: ListenerEffect[] = [];
 const removeListenerEffect = (listener: ListenerEffect) => Effect.gen(function* (_) {
     const index = registered_listeners.indexOf(listener);
     if (index == -1) {
-        return yield* _(Effect.fail(new ListenerNotFoundError()));
+        return yield* Effect.void;
     }
     registered_listeners.splice(index, 1);
     return yield* Effect.void;
@@ -39,10 +34,7 @@ export const listen = Effect.gen(function* (_) {
             return Effect.all([
                 remove_effect,
                 Effect.fail(new CallbackRegistrationError({ err })),
-            ]).pipe(Effect.catchTag(
-                "ListenerNotFoundError",
-                () => Effect.void // If it is not there for some reason, we are good
-            ))
+            ])
         }));
     }
 
@@ -71,7 +63,7 @@ export class MessageProcessingErrorT extends Context.Tag("MessageProcessingError
 export type ErrorListenEffect = Effect.Effect<void, never, MessageProcessingErrorT>;
 export class ErrorListenerT extends Context.Tag("ErrorListenerT")<ErrorListenerT, {
     listen: ErrorListenEffect,
-    remove_cb?: (remove_effect: Effect.Effect<void, ListenerNotFoundError, void>) => void;
+    remove_cb?: (remove_effect: Effect.Effect<void, never, never>) => void;
 }>() { }
 
 const registered_error_listeners: ErrorListenEffect[] = [];
@@ -79,7 +71,7 @@ const registered_error_listeners: ErrorListenEffect[] = [];
 const removeErrorListenerEffect = (listener: ErrorListenEffect) => Effect.gen(function* (_) {
     const index = registered_error_listeners.indexOf(listener);
     if (index == -1) {
-        return yield* _(Effect.fail(new ListenerNotFoundError()));
+        return yield* Effect.void;
     }
     registered_error_listeners.splice(index, 1);
     return yield* Effect.void;
@@ -99,11 +91,7 @@ export const listenMessageProcessingError = Effect.gen(function* (_) {
             return Effect.all([
                 remove_effect,
                 Effect.fail(new CallbackRegistrationError({ err })),
-            ]).pipe(Effect.catchTag(
-                "ListenerNotFoundError",
-                () => Effect.void // If it is not there for some reason, we are good
-            )
-            )
+            ])
         }));
     }
 

@@ -2,7 +2,7 @@ import { Effect, Schema, Option, Data, Context } from "effect";
 import { Json, Message, MessageT } from "../base/message";
 import { Address } from "../base/address";
 import { MiddlewareContinue, MiddlewareError, MiddlewareInterrupt } from "../base/middleware";
-import uuidv4, { UUID } from "../base/uuid";
+import { v4 as uuidv4 } from 'uuid';
 import { LocalComputedMessageDataT } from "../base/local_computed_message_data";
 import { EnvironmentT } from "../base/environment";
 
@@ -19,7 +19,6 @@ export class ChainTimeout extends Data.TaggedError("ChainTimeout")<{
     timeout: number;
     msg_chain_uid: string;
 }> { }
-
 
 export type ChainMessageResult = {
     message: Message,
@@ -69,7 +68,7 @@ const chain_queue: {
     }
 } = {};
 
-const chain_message_promise_as_effect = (message: Message, chain_uid: UUID, timeout: number) => {
+const chain_message_promise_as_effect = (message: Message, chain_uid: string, timeout: number) => {
     const prom = chain_message_promise(message, chain_uid, timeout);
     return Effect.tryPromise(() => prom).pipe(
         Effect.mapError((error) => {
@@ -86,7 +85,7 @@ function get_message_promise_key(msg_chain_uid: string, current_msg_chain_length
     return `${msg_chain_uid}_${send === "send" ? current_msg_chain_length : current_msg_chain_length - 1}`;
 }
 
-const chain_message_promise = (message: Message, chain_uid: UUID, timeout: number) => {
+const chain_message_promise = (message: Message, chain_uid: string, timeout: number) => {
     const key = get_message_promise_key(chain_uid, (message as any).meta_data?.chain_message?.current_msg_chain_length ?? 0, "send");
     const prom = new Promise<ChainMessageResult>((resolve, reject) => {
         chain_queue[key] = {
@@ -210,10 +209,10 @@ const continue_chain_fn = (message: Message): ResponseFunction => {
             Effect.mapError(err => new MiddlewareError({ err: new Error(err.toString()), message }))
         );
 
-        const prom = chain_message_promise(res, msg_chain_uid as UUID, new_timeout ?? timeout);
+        const prom = chain_message_promise(res, msg_chain_uid, new_timeout ?? timeout);
         return Effect.tryPromise({
             try: () => prom,
-            catch: () => new ChainTimeout({ timeout: new_timeout ?? timeout, msg_chain_uid: msg_chain_uid as UUID })
+            catch: () => new ChainTimeout({ timeout: new_timeout ?? timeout, msg_chain_uid: msg_chain_uid })
         })
     });
 }

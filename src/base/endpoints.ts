@@ -4,7 +4,7 @@ import { AddressAlreadyInUseError, CommunicationChannel, MessageChannelTransmiss
 import { Equal, Effect } from "effect";
 import { AddressNotFoundError, kernel_send } from "./kernel_environment/send";
 import { MessageT, TransmittableMessageT } from "./message";
-import { CallbackRegistrationError } from "./kernel_environment/listen";
+import { CallbackRegistrationError } from "./errors/callback_registration";
 
 export type Endpoint = {
     address: Address;

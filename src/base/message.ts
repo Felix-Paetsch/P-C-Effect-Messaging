@@ -1,6 +1,5 @@
 import { Context, Data, Effect, ParseResult, pipe, Schema } from "effect";
 import { Address } from "./address";
-import { CommunicationChannel } from "./communication_channel";
 
 export class MessageT extends Context.Tag("MessageT")<
     MessageT,
@@ -30,7 +29,7 @@ export class Message {
     private msg_content: MessageContent;
 
     constructor(
-        public target: Address, // | Communicator,
+        public target: Address,
         content: string | { [key: string]: Json },
         public meta_data: { [key: string]: Json } = {}
     ) {
@@ -45,14 +44,14 @@ export class Message {
         return Schema.encode(Message.MessageFromString)(this)
             .pipe(
                 Effect.map(serialized => serialized as SerializedMessage),
-                Effect.catchTag("ParseError", () => new MessageSerializationError())
+                Effect.mapError(() => new MessageSerializationError())
             )
     }
 
     static deserialize(serialized: SerializedMessage): Effect.Effect<Message, MessageDeserializationError> {
         return Schema.decode(Message.MessageFromString)(serialized)
             .pipe(
-                Effect.catchTag("ParseError", () => new MessageDeserializationError())
+                Effect.mapError(() => new MessageDeserializationError())
             )
     }
 
@@ -78,7 +77,7 @@ export class Message {
         return Effect.gen(function* (_) {
             if (this_msg.msg_content.deserialized === null) {
                 if (this_msg.msg_content.serialized === null) {
-                    return yield* _(Effect.fail(new MessageDeserializationError()));
+                    return yield* Effect.dieMessage("Both serialized and deserialized are null");
                 }
 
                 const deserialized = yield* _(Schema.decode(transform_message_content)(this_msg.msg_content.serialized));
@@ -86,11 +85,16 @@ export class Message {
             }
 
             return this_msg.msg_content.deserialized!;
-        }).pipe(Effect.catchTag("ParseError", () => new MessageDeserializationError()));
+        }).pipe(Effect.mapError(() => new MessageDeserializationError()));
     }
 
-    get content_string(): Effect.Effect<string, MessageDeserializationError> {
-        return this.content.pipe(Effect.map(content => JSON.stringify(content)));
+    get content_string(): Effect.Effect<string> {
+        if (this.msg_content.serialized) {
+            return Effect.succeed(this.msg_content.serialized!);
+        }
+        return Schema.encode(transform_message_content)(this.msg_content.deserialized!).pipe(
+            Effect.orDie
+        );
     }
 
     static content(msg: Message | string) {

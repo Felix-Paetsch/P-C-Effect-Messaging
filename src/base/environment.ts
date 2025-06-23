@@ -1,17 +1,23 @@
 import { Context, Data, Effect, Equal, Option } from "effect";
 import { MessageT, TransmittableMessageT } from "./message";
-import { MessageTransmissionError } from "./message_errors";
+import { MessageTransmissionError } from "./errors/message_errors";
 import { Address, AddressT } from "./address";
 import { Middleware, MiddlewareConfT, useMiddleware } from "./middleware";
 import { AddressAlreadyInUseError, CommunicationChannel, CommunicationChannelT, MessageChannelTransmissionError, registerCommunicationChannel } from "./communication_channel";
-import { AddressNotFoundError } from "./kernel_environment/send";
 import { LocalComputedMessageDataT } from "./local_computed_message_data";
 
+/** 
+ * Allows to interact with the messaging system via a designated node for message sending and receiving 
+ */
 export type Environment = {
+    /** The address of the environment */
     ownAddress: Address;
+    /** From the outside world "inside out env" send a message to the system */
     send: Effect.Effect<void, MessageTransmissionError | EnvironmentInactiveError, MessageT>;
+    /** Remove the environment from the system */
     remove: Effect.Effect<void, never, never>,
-    useMiddleware: (middleware: Middleware) => Effect.Effect<void, AddressNotFoundError | EnvironmentInactiveError, never>
+    /** Use a middleware on the environment address */
+    useMiddleware: (middleware: Middleware) => Effect.Effect<void, EnvironmentInactiveError, never>
 }
 
 export class EnvironmentT extends Context.Tag("EnvironmentT")<EnvironmentT, Environment>() { }
@@ -19,6 +25,12 @@ export class EnvironmentInactiveError extends Data.TaggedError("EnvironmentInact
     address: Address;
 }> { }
 
+/**
+ * Creates a local environment for message handling
+ * @param ownAddress - The address of the environment
+ * @param onRecieve - What to do when the message system has a message for this environment
+ * @returns Effect that creates an Environment
+ */
 export const createLocalEnvironment = (
     ownAddress: Address,
     onRecieve: Effect.Effect<void, never, MessageT> = Effect.void
@@ -60,17 +72,18 @@ export const createLocalEnvironment = (
     yield* registerCommunicationChannel.pipe(
         Effect.provideService(AddressT, ownAddress),
         Effect.provideService(CommunicationChannelT, communication_channel)
-    ).pipe(Effect.orDie);
-
-    const send_message = on_recieve.pipe(
-        Effect.provideServiceEffect(TransmittableMessageT, MessageT.pipe(
-            Effect.map(msg => msg.as_transmittable())
-        ))
+    ).pipe(
+        Effect.catchTag("CallbackRegistrationError", (e) => Effect.die(e))
     );
 
     const res = {
         ownAddress,
-        send: guard_is_active.pipe(Effect.andThen(() => send_message)),
+        send: guard_is_active.pipe(
+            Effect.andThen(() => on_recieve),
+            Effect.provideServiceEffect(TransmittableMessageT, MessageT.pipe(
+                Effect.map(msg => msg.as_transmittable())
+            ))
+        ),
         remove: remove_effect.pipe(Effect.andThen(() => {
             active = false;
         })),
@@ -80,6 +93,11 @@ export const createLocalEnvironment = (
                     middleware: middleware,
                     address: ownAddress
                 })
+            )),
+            Effect.orElse(() => remove_effect.pipe(
+                Effect.andThen(
+                    () => Effect.fail(new EnvironmentInactiveError({ address: ownAddress }))
+                )
             ))
         )
     }
@@ -88,6 +106,11 @@ export const createLocalEnvironment = (
     return res;
 });
 
+/**
+ * Creates a middleware that sets the at_target flag when a message reaches its target address
+ * @param address - The address to check against
+ * @returns A middleware Effect
+ */
 const set_at_target_middleware = (address: Address): Middleware => Effect.gen(function* (_) {
     const message = yield* _(MessageT);
     const local_computed_message_data = yield* _(LocalComputedMessageDataT);
