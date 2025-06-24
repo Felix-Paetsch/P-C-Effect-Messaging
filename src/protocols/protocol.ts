@@ -1,5 +1,5 @@
-import { Context, Data, Effect, Schema, Equal, Option, pipe } from "effect"
-import { catchAllAsMiddlewareError, Middleware } from "../base/middleware"
+import { Context, Data, Effect, Schema, Equal, Option, pipe, Console } from "effect"
+import { Middleware } from "../base/middleware"
 import { chain_middleware, ChainMessageResult, ChainMessageResultT, ChainTimeout, make_message_chain } from "../middleware/message_chains"
 import { Address } from "../base/address"
 import { Json, Message, MessageT } from "../base/message";
@@ -19,8 +19,9 @@ type ProtocolMessageRespond = (data: Json, is_error?: boolean) =>
     >
 export type ProtocolMessage = Message & {
     readonly respond: ProtocolMessageRespond,
-    readonly respond_error: (error: Error) => Effect.Effect<never, ProtocolError, EnvironmentT>,
-    content: Effect.Effect<{ [key: string]: Json } & { data: Json }, never, never>
+    readonly respond_error: (error: Error) => Effect.Effect<void, never>,
+    content: Effect.Effect<{ [key: string]: Json } & { data: Json }, never, never>,
+    data: Effect.Effect<Json, never, never>
 }
 
 export class ProtocolMessageT extends Context.Tag("ProtocolMessageT")<ProtocolMessageT, ProtocolMessage>() { }
@@ -48,10 +49,6 @@ export class Protocol<SenderResult, ReceiverResult> {
         }
     )
 
-    static message_to_data = (msg: ProtocolMessage) => msg.content.pipe(
-        Effect.andThen(content => content.data)
-    );
-
     // Will be called if the first message reaches its target on the other side
     protected on_first_request: Effect.Effect<void, ProtocolError, ProtocolMessageT>
         = Effect.fail(Protocol.not_implemented_error)
@@ -74,6 +71,7 @@ export class Protocol<SenderResult, ReceiverResult> {
             self.set_protocol_meta_data(message)
             const responseE = yield* make_message_chain(message, timeout)
             const send = (yield* EnvironmentT).send;
+
             yield* send.pipe(
                 Effect.provideService(
                     MessageT,
@@ -89,7 +87,7 @@ export class Protocol<SenderResult, ReceiverResult> {
                     }
 
                     return new ProtocolError({
-                        message: "Protocol error",
+                        message: "Chain timeout",
                         error: e
                     })
                 })
@@ -125,17 +123,24 @@ export class Protocol<SenderResult, ReceiverResult> {
             }
 
             if (protocol_meta_data.value.is_error) {
-                const errorMessage = typeof content.data === 'string'
-                    ? content.data
-                    : JSON.stringify(content.data);
+                let res_message: string = "Responded with protocol error";
+                if (typeof content.data === 'object') {
+                    res_message = (content.data as any)?.message || "Responded with protocol error";
+                    // res_stack = (content.data as any)?.stack || "";
+                }
+
+                if (typeof res_message !== "string") {
+                    res_message = JSON.stringify(res_message);
+                }
+
                 return yield* Effect.fail(new ProtocolError({
-                    message: errorMessage,
+                    message: res_message,
                     error: new Error("Other side responded with error")
                 }));
             }
 
             const env = yield* _(EnvironmentT);
-            const respond: ProtocolMessageRespond = (data, is_error = false) => {
+            const respond: ProtocolMessageRespond = (data = "Ok", is_error = false) => {
                 return res.respond({ data }, {
                     protocol: {
                         ...self.protocol_meta_data, is_error
@@ -168,19 +173,16 @@ export class Protocol<SenderResult, ReceiverResult> {
 
             const respond_error: ProtocolMessage["respond_error"] = (err) =>
                 pipe(
-                    Effect.fail(new ProtocolError({
+                    respond({
                         message: err.message || "An error occurred",
-                        error: err
-                    })),
-                    Effect.tapError(e => respond({
-                        message: e.message || "An error occurred",
-                        stack: e.stack || ""
-                    }, true).pipe(Effect.ignore))
+                        stack: err.stack || ""
+                    }, true).pipe(Effect.ignore)
                 );
 
             const protocolMessage = Object.assign(msg, {
                 respond,
-                respond_error
+                respond_error,
+                data: msg.content.pipe(Effect.orDie, Effect.andThen(content => content.data))
             });
 
             return protocolMessage as ProtocolMessage;
@@ -205,10 +207,39 @@ export class Protocol<SenderResult, ReceiverResult> {
         return Effect.fail(Protocol.not_implemented_error)
     }
 
+    static fail_as_protocol_error = Effect.mapError(e => {
+        if (e instanceof ProtocolError) {
+            return e;
+        }
+
+        let message = "An error occurred";
+        if (typeof (e as any)?.message === "string") {
+            message = (e as any)?.message;
+        }
+
+        let error = new Error(message);
+        if (e instanceof Error) {
+            error = e;
+        }
+
+        return new ProtocolError({ message, error })
+    })
+
+    static fail_with_response = <A, R>(e: Effect.Effect<A, unknown, R>) => pipe(
+        e,
+        Protocol.fail_as_protocol_error,
+        Effect.catchTag("ProtocolError", e => Effect.gen(function* (_) {
+            const protocol_message = yield* _(ProtocolMessageT);
+            yield* protocol_message.respond_error(e);
+            return yield* Effect.fail(e);
+        }))
+    )
+
     /** Will be called on the target if the protocol finished */
-    on(result: ReceiverResult): Effect.Effect<void, never, never> {
-        return Effect.void
+    on(cb: (result: ReceiverResult) => Effect.Effect<void, never, never>): void {
+        this.on_callback = cb;
     }
+    protected on_callback: (result: ReceiverResult) => Effect.Effect<void, never, never> = () => Effect.void;
 
     static get_protocol_meta_data = (meta_data: { [key: string]: Json }) =>
         Schema.decodeUnknown(ProtocolMetaDataSchema)(meta_data.protocol).pipe(
@@ -226,7 +257,7 @@ export class Protocol<SenderResult, ReceiverResult> {
                         Effect.andThen(result => self.to_protocol_message(result))
                     )
                 ),
-                catchAllAsMiddlewareError
+                Effect.ignore
             )
 
             return chain_middleware(
@@ -240,7 +271,11 @@ export class Protocol<SenderResult, ReceiverResult> {
                         return false
                     }
 
-                    return Equal.equals(protocol_meta_data.value, self.protocol_meta_data)
+                    return (
+                        protocol_meta_data.value.protocol === self.protocol_meta_data.protocol
+                        && protocol_meta_data.value.protocol_ident === self.protocol_meta_data.protocol_ident
+                        && protocol_meta_data.value.protocol_version === self.protocol_meta_data.protocol_version
+                    )
                 })
             )
         })

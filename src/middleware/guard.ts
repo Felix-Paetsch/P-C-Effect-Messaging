@@ -45,3 +45,23 @@ export function guard_at_target(middleware: Middleware): Middleware {
         })
     );
 }
+
+export function guard_at_source(middleware: Middleware): Middleware {
+    return guard_middleware(
+        middleware,
+        Effect.gen(function* (_) {
+            const { at_source } = yield* _(LocalComputedMessageDataT);
+            return at_source;
+        })
+    );
+}
+
+export function guard_at_source_or_target(middleware: Middleware): Middleware {
+    return guard_middleware(
+        middleware,
+        Effect.gen(function* (_) {
+            const { at_source, at_target } = yield* _(LocalComputedMessageDataT);
+            return at_source || at_target;
+        })
+    );
+}

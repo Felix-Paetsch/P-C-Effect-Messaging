@@ -6,7 +6,7 @@ import { kernel_send } from "./send";
 
 export const KernelEnv = {
     ownAddress: Address.local_address,
-    send: kernel_send,
+    send: kernel_send.pipe(Effect.catchTag("InvalidMessageFormatError", () => Effect.void)),
     remove: Effect.void,
     useMiddleware: (middleware: Middleware) => useMiddleware.pipe(
         Effect.provideService(MiddlewareConfT, {

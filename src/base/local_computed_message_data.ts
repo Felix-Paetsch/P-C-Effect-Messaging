@@ -17,6 +17,10 @@ export type LocalComputedMessageData = {
      * If not overwritten by middleware, this is true only at the kernel if the message is for the kernel
      */
     at_target: boolean;
+    /**
+     * Whether the current address processor is the source of the message.
+     */
+    at_source: boolean;
 
     [key: string]: any;
 }
@@ -34,7 +38,8 @@ export const justSentLocalComputedMessageData = Effect.gen(function* (_) {
     const message = yield* _(MessageT);
     return {
         direction: Equal.equals(message.target, Address.local_address) ? "incoming" : "outgoing",
-        at_target: Equal.equals(message.target, Address.local_address)
+        at_target: Equal.equals(message.target, Address.local_address),
+        at_source: true
     } as LocalComputedMessageData;
 })
 
@@ -47,6 +52,7 @@ const sendRecievedLocalComputedMessageData = Effect.gen(function* (_) {
     const computed_data = yield* _(LocalComputedMessageDataT);
     computed_data.direction = Equal.equals(message.target, Address.local_address)
         ? "incoming" : "outgoing";
+    computed_data.at_source = false;
     return computed_data;
 })
 
@@ -74,7 +80,8 @@ export const sendLocalComputedMessageData = Effect.gen(function* (_) {
 export const justRecievedLocalComputedMessageData = Effect.gen(function* (_) {
     const res: LocalComputedMessageData = {
         direction: "incoming",
-        at_target: false
+        at_target: false,
+        at_source: false
     };
     return res;
 });

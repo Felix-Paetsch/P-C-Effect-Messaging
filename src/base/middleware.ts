@@ -1,10 +1,8 @@
-import { Effect, Context, Data } from "effect";
+import { Effect, Context } from "effect";
 import { Address } from "./address";
 import { findEndpoint } from "./endpoints";
-import { MessageT, Message } from "./message";
+import { MessageT } from "./message";
 import { LocalComputedMessageDataT } from "./local_computed_message_data";
-
-export class MiddlewareError extends Data.TaggedError("MiddlewareError")<{ err: Error, message: Message }> { }
 
 type MiddlewareInterrupt = { readonly __brand: "MiddlewareInterrupt" };
 type MiddlewareContinue = { readonly __brand: "MiddlewareContinue" } | void | undefined;
@@ -12,7 +10,7 @@ export type MiddlewarePassthrough = MiddlewareInterrupt | MiddlewareContinue;
 export const MiddlewareInterrupt: MiddlewareInterrupt = { __brand: "MiddlewareInterrupt" } as MiddlewareInterrupt;
 export const MiddlewareContinue: MiddlewareContinue = { __brand: "MiddlewareContinue" } as MiddlewareContinue;
 
-export type Middleware = Effect.Effect<MiddlewarePassthrough, MiddlewareError, MessageT | LocalComputedMessageDataT>;
+export type Middleware = Effect.Effect<MiddlewarePassthrough, never, MessageT | LocalComputedMessageDataT>;
 
 export type MiddlewareConf = {
     readonly middleware: Middleware;
@@ -36,11 +34,3 @@ export const useMiddleware = Effect.gen(function* (_) {
 
     return yield* _(Effect.void);
 });
-
-export const catchAllAsMiddlewareError = Effect.catchAll((error: Error) => Effect.gen(function* (_) {
-    const message = yield* _(MessageT);
-    return yield* Effect.fail(new MiddlewareError({
-        err: error,
-        message
-    }))
-}))

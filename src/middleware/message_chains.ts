@@ -1,11 +1,12 @@
 import { Effect, Schema, Data, Context } from "effect";
 import { Json, Message, MessageT } from "../base/message";
 import { Address } from "../base/address";
-import { Middleware, MiddlewareContinue, MiddlewareError, MiddlewareInterrupt } from "../base/middleware";
+import { Middleware, MiddlewareContinue, MiddlewareInterrupt } from "../base/middleware";
 import { v4 as uuidv4 } from 'uuid';
 import { LocalComputedMessageDataT } from "../base/local_computed_message_data";
-import { EnvironmentT } from "../base/environment";
+import { EnvironmentInactiveError, EnvironmentT } from "../base/environment";
 import { guard_at_target } from "./guard";
+import { InvalidMessageFormatError, MessageTransmissionError } from "../base/errors/message_errors";
 
 const chain_message_schema = Schema.Struct({
     current_sender: Address.AddressFromString,
@@ -33,12 +34,12 @@ export class ChainMessageResultT extends Context.Tag("ChainMessageResultT")<
 
 export type ChainContinueEffect = Effect.Effect<
     Effect.Effect<ChainMessageResult, ChainTimeout, EnvironmentT>,
-    MiddlewareError,
+    MessageTransmissionError | EnvironmentInactiveError | InvalidMessageFormatError,
     EnvironmentT
 >;
 export type ResponseFunction = (
     content: { [key: string]: Json },
-    meta_data: { [key: string]: any },
+    meta_data: { [key: string]: Json },
     new_timeout?: number
 ) => ChainContinueEffect;
 export class ResponseFunctionT extends Context.Tag("ResponseFunctionT")<
@@ -80,13 +81,10 @@ function get_message_promise_key(msg_chain_uid: string, current_msg_chain_length
 const chain_message_promise_as_effect = (message: Message, chain_uid: string, timeout: number) => {
     const prom = chain_message_promise(message, chain_uid, timeout);
     return Effect.tryPromise(() => prom).pipe(
-        Effect.catchAll((error) => {
-            if (error instanceof ChainTimeout) {
-                return error as ChainTimeout;
-            }
-
-            return Effect.die(error);
-        })
+        Effect.mapError(_ => new ChainTimeout({
+            timeout: timeout,
+            msg_chain_uid: chain_uid
+        }))
     )
 }
 
@@ -121,47 +119,50 @@ const chain_message_promise = (message: Message, chain_uid: string, timeout: num
 }
 
 export const chain_middleware = (
-    on_first_request: Effect.Effect<void, MiddlewareError, MessageT | ResponseFunctionT | ChainMessageResultT | LocalComputedMessageDataT>,
-    process_message: Effect.Effect<void, MiddlewareError, MessageT | ResponseFunctionT | ChainMessageResultT | LocalComputedMessageDataT>,
+    on_first_request: Effect.Effect<void, never, MessageT | ResponseFunctionT | ChainMessageResultT | LocalComputedMessageDataT>,
+    process_message: Effect.Effect<void, never, MessageT | ResponseFunctionT | ChainMessageResultT | LocalComputedMessageDataT>,
     should_process_message: Effect.Effect<boolean, never, MessageT | LocalComputedMessageDataT> = Effect.succeed(true)
-) => guard_at_target(Effect.gen(function* (_) {
-    const message = yield* _(MessageT);
-    const chain_message = message.meta_data.chain_message;
+) => guard_at_target(
+    Effect.gen(function* (_) {
+        const message = yield* _(MessageT);
+        const chain_message = message.meta_data.chain_message;
 
-    if (
-        typeof chain_message === "undefined"
-        || !(yield* should_process_message)
-    ) {
-        return MiddlewareContinue;
-    }
+        if (
+            typeof chain_message === "undefined"
+            || !(yield* should_process_message)
+        ) {
+            return MiddlewareContinue;
+        }
 
-    const data = yield* _(Schema.decodeUnknown(chain_message_schema)(chain_message)).pipe(
-        Effect.mapError(() => new MiddlewareError({
-            err: new Error("Chain message meta data has wrong format."),
-            message
-        }))
-    );
+        const data = yield* _(Schema.decodeUnknown(chain_message_schema)(chain_message)).pipe(
+            Effect.mapError((e) => new InvalidMessageFormatError({
+                message: message,
+                err: e,
+                descr: "Chain message meta data has wrong format."
+            }))
+        );
 
-    const continue_chain = continue_chain_fn(message);
-    const chain_message_context = Context.empty().pipe(
-        Context.add(ChainMessageResultT, { message: message, respond: continue_chain }),
-        Context.add(ResponseFunctionT, continue_chain)
-    )
+        const continue_chain = continue_chain_fn(message);
+        const chain_message_context = Context.empty().pipe(
+            Context.add(ChainMessageResultT, { message: message, respond: continue_chain }),
+            Context.add(ResponseFunctionT, continue_chain)
+        );
 
-    yield* process_message.pipe(Effect.provide(chain_message_context));
+        yield* process_message.pipe(Effect.provide(chain_message_context));
 
-    const promise_key = get_message_promise_key(data.msg_chain_uid, data.current_msg_chain_length, "recieve");
-    if (data.current_msg_chain_length === 1) {
-        yield* on_first_request.pipe(Effect.provide(chain_message_context));
-    } else if (chain_queue[promise_key]) {
-        chain_queue[promise_key].resolve({
-            message: message,
-            respond: continue_chain
-        });
-    }
+        const promise_key = get_message_promise_key(data.msg_chain_uid, data.current_msg_chain_length, "recieve");
+        if (data.current_msg_chain_length === 1) {
+            yield* on_first_request.pipe(Effect.provide(chain_message_context));
+        } else if (chain_queue[promise_key]) {
+            chain_queue[promise_key].resolve({
+                message: message,
+                respond: continue_chain
+            });
+        }
 
-    return MiddlewareInterrupt;
-}))
+        return MiddlewareInterrupt;
+    }).pipe(Effect.ignore)
+);
 
 const continue_chain_fn = (message: Message): ResponseFunction => {
     return (content: { [key: string]: Json }, meta_data: { [key: string]: any } = {}, new_timeout?: number): ChainContinueEffect => Effect.gen(function* (_) {
@@ -174,9 +175,10 @@ const continue_chain_fn = (message: Message): ResponseFunction => {
             timeout,
             created_at
         } = yield* _(Schema.decodeUnknown(chain_message_schema)(chain_message)).pipe(
-            Effect.mapError(() => new MiddlewareError({
-                err: new Error("Chain message meta data has wrong format."),
-                message
+            Effect.mapError((e) => new InvalidMessageFormatError({
+                message: message,
+                err: e,
+                descr: "Chain message meta data has wrong format."
             }))
         );
 
@@ -193,18 +195,15 @@ const continue_chain_fn = (message: Message): ResponseFunction => {
         });
 
         const send = (yield* EnvironmentT).send;
-        yield* send.pipe(
-            Effect.provideService(MessageT, res),
-            Effect.mapError(err => new MiddlewareError({ err: new Error(err.toString()), message }))
-        );
+        yield* send.pipe(Effect.provideService(MessageT, res));
 
         return chain_message_promise_as_effect(res, msg_chain_uid, new_timeout ?? timeout);
     });
 }
 
 export const id_chain_middleware = (
-    on_first_request: Effect.Effect<void, MiddlewareError, MessageT | ResponseFunctionT | ChainMessageResultT | LocalComputedMessageDataT>,
-    process_message: Effect.Effect<void, MiddlewareError, MessageT | ResponseFunctionT | ChainMessageResultT | LocalComputedMessageDataT>,
+    on_first_request: Effect.Effect<void, never, MessageT | ResponseFunctionT | ChainMessageResultT | LocalComputedMessageDataT>,
+    process_message: Effect.Effect<void, never, MessageT | ResponseFunctionT | ChainMessageResultT | LocalComputedMessageDataT>,
     id: string
 ): Middleware & {
     make_message_chain: (message: Message) => Effect.Effect<Message, ChainTimeout, EnvironmentT>

@@ -6,7 +6,9 @@ export class MessageT extends Context.Tag("MessageT")<
     Message
 >() { }
 
-export class MessageSerializationError extends Data.TaggedError("MessageSerializationError")<{}> { }
+export class MessageSerializationError extends Data.TaggedError("MessageSerializationError")<{
+    message: Message
+}> { }
 export class MessageDeserializationError extends Data.TaggedError("MessageDeserializationError")<{}> { }
 
 export type SerializedMessage = string & { readonly __brand: "SerializedMessage" };
@@ -44,7 +46,7 @@ export class Message {
         return Schema.encode(Message.MessageFromString)(this)
             .pipe(
                 Effect.map(serialized => serialized as SerializedMessage),
-                Effect.mapError(() => new MessageSerializationError())
+                Effect.mapError(() => new MessageSerializationError({ message: this }))
             )
     }
 
@@ -60,7 +62,7 @@ export class Message {
         return Effect.gen(function* (_) {
             if (this_msg.msg_content.serialized === null) {
                 if (this_msg.msg_content.deserialized === null) {
-                    return yield* _(Effect.fail(new MessageSerializationError()));
+                    return yield* _(Effect.fail(new MessageSerializationError({ message: this_msg })));
                 }
 
                 const serialized = yield* _(Schema.encode(transform_message_content)(this_msg.msg_content.deserialized));
@@ -68,7 +70,7 @@ export class Message {
             }
 
             return this_msg.msg_content.serialized!;
-        }).pipe(Effect.catchTag("ParseError", () => new MessageSerializationError()));
+        }).pipe(Effect.catchTag("ParseError", () => new MessageSerializationError({ message: this })));
 
     }
 

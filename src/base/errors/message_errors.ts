@@ -1,24 +1,19 @@
-import { AddressAlreadyInUseError, MessageChannelTransmissionError } from "../communication_channel";
-import { MessageDeserializationError, MessageSerializationError } from "../message";
-import { MiddlewareError } from "../middleware";
+import { Data } from "effect";
+import { MessageChannelTransmissionError } from "../communication_channel";
 import { AddressNotFoundError } from "../kernel_environment/send";
-import { EnvironmentInactiveError } from "../environment";
+import { Message } from "../message";
 
 export type MessageTransmissionError =
-    MiddlewareError
-    | MessageSerializationError
-    | AddressNotFoundError
-    | AddressAlreadyInUseError
+    AddressNotFoundError
     | MessageChannelTransmissionError
-    | MessageDeserializationError
-    | EnvironmentInactiveError
 
 export function isMessageTransmissionError(e: Error): e is MessageTransmissionError {
-    return e instanceof MiddlewareError ||
-        e instanceof MessageSerializationError ||
-        e instanceof AddressNotFoundError ||
-        e instanceof AddressAlreadyInUseError ||
-        e instanceof MessageChannelTransmissionError ||
-        e instanceof MessageDeserializationError ||
-        e instanceof EnvironmentInactiveError
+    return e instanceof AddressNotFoundError ||
+        e instanceof MessageChannelTransmissionError
 }
+
+export class InvalidMessageFormatError extends Data.TaggedError("InvalidMessageFormatError")<{
+    message: Message,
+    err: Error,
+    descr: string
+}> { }

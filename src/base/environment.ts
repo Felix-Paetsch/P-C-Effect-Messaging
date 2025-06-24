@@ -1,10 +1,11 @@
-import { Context, Data, Effect, Equal, Option } from "effect";
+import { Context, Data, Effect, Option } from "effect";
 import { MessageT, TransmittableMessageT } from "./message";
 import { MessageTransmissionError } from "./errors/message_errors";
 import { Address, AddressT } from "./address";
 import { Middleware, MiddlewareConfT, useMiddleware } from "./middleware";
 import { AddressAlreadyInUseError, CommunicationChannel, CommunicationChannelT, MessageChannelTransmissionError, registerCommunicationChannel } from "./communication_channel";
 import { LocalComputedMessageDataT } from "./local_computed_message_data";
+import { AddressNotFoundError } from "./kernel_environment/send";
 
 /** 
  * Allows to interact with the messaging system via a designated node for message sending and receiving 
@@ -13,7 +14,7 @@ export type Environment = {
     /** The address of the environment */
     ownAddress: Address;
     /** From the outside world "inside out env" send a message to the system */
-    send: Effect.Effect<void, MessageTransmissionError | EnvironmentInactiveError, MessageT>;
+    send: Effect.Effect<void, AddressNotFoundError | MessageChannelTransmissionError | EnvironmentInactiveError, MessageT>;
     /** Remove the environment from the system */
     remove: Effect.Effect<void, never, never>,
     /** Use a middleware on the environment address */
@@ -33,9 +34,9 @@ export class EnvironmentInactiveError extends Data.TaggedError("EnvironmentInact
  */
 export const createLocalEnvironment = (
     ownAddress: Address,
-    onRecieve: Effect.Effect<void, never, MessageT> = Effect.void
+    onMessageForOutsideWorld: Effect.Effect<void, never, MessageT> = Effect.void
 ): Effect.Effect<Environment, AddressAlreadyInUseError, never> => Effect.gen(function* (_) {
-    let on_recieve: Effect.Effect<void, MessageTransmissionError, TransmittableMessageT> = Effect.void;
+    let _onMessageForKernelRecieved: Effect.Effect<void, AddressNotFoundError | MessageChannelTransmissionError, TransmittableMessageT> = Effect.void;
     let remove_effect: Effect.Effect<void, never, never> = Effect.void;
     let active: boolean = true;
     const guard_is_active = Effect.gen(function* (_) {
@@ -47,14 +48,14 @@ export const createLocalEnvironment = (
 
     const communication_channel: CommunicationChannel = {
         address: ownAddress,
-        send: onRecieve.pipe(
+        send: onMessageForOutsideWorld.pipe(
             Effect.provideServiceEffect(MessageT, TransmittableMessageT.pipe(
                 Effect.flatMap(msg => msg.message)
             )),
             Effect.mapError(err => new MessageChannelTransmissionError({ err }))
         ),
-        recieve_cb: (_on_recieve: Effect.Effect<Option.Option<MessageTransmissionError>, never, TransmittableMessageT>) => {
-            const new_recieve_effect = _on_recieve.pipe(
+        recieve_cb: (onMessageForKernelRecieved: Effect.Effect<Option.Option<MessageTransmissionError>, never, TransmittableMessageT>) => {
+            const new_recieve_effect = onMessageForKernelRecieved.pipe(
                 Effect.andThen(op => op.pipe(
                     Option.match({
                         onNone: () => Effect.void,
@@ -62,7 +63,7 @@ export const createLocalEnvironment = (
                     })
                 ))
             );
-            on_recieve = new_recieve_effect;
+            _onMessageForKernelRecieved = new_recieve_effect;
         },
         remove_cb: (_remove_effect: Effect.Effect<void, never, never>) => {
             remove_effect = _remove_effect;
@@ -79,7 +80,7 @@ export const createLocalEnvironment = (
     const res = {
         ownAddress,
         send: guard_is_active.pipe(
-            Effect.andThen(() => on_recieve),
+            Effect.andThen(_onMessageForKernelRecieved),
             Effect.provideServiceEffect(TransmittableMessageT, MessageT.pipe(
                 Effect.map(msg => msg.as_transmittable())
             ))
@@ -102,19 +103,22 @@ export const createLocalEnvironment = (
         )
     }
 
-    yield* res.useMiddleware(set_at_target_middleware(ownAddress)).pipe(Effect.orDie);
+    yield* res.useMiddleware(at_target_middleware).pipe(Effect.orDie);
+    yield* res.useMiddleware(at_source_middleware).pipe(Effect.orDie);
     return res;
 });
 
-/**
- * Creates a middleware that sets the at_target flag when a message reaches its target address
- * @param address - The address to check against
- * @returns A middleware Effect
- */
-const set_at_target_middleware = (address: Address): Middleware => Effect.gen(function* (_) {
-    const message = yield* _(MessageT);
+const at_source_middleware = Effect.gen(function* (_) {
     const local_computed_message_data = yield* _(LocalComputedMessageDataT);
-    if (Equal.equals(message.target, address)) {
+    // Note that direction is from the perspective of the kernel
+    if (local_computed_message_data.direction === "incoming") {
+        local_computed_message_data.at_source = true;
+    }
+})
+
+const at_target_middleware = Effect.gen(function* (_) {
+    const local_computed_message_data = yield* _(LocalComputedMessageDataT);
+    if (local_computed_message_data.direction === "outgoing") {
         local_computed_message_data.at_target = true;
     }
 })

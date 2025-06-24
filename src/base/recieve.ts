@@ -1,35 +1,44 @@
 import { Context, Effect, pipe } from "effect";
-import { MessageT, TransmittableMessageT } from "./message";
+import { Message, MessageT, TransmittableMessageT } from "./message";
 import { Address, AddressT } from "./address";
-import { KernelEnv } from "./kernel_environment/index";
 import { applyMiddlewareEffect } from "./apply_middleware_effect";
 import { MiddlewareInterrupt } from "./middleware";
 import { LocalComputedMessageDataT, justRecievedLocalComputedMessageData } from "./local_computed_message_data";
+import { InvalidMessageFormatError, MessageTransmissionError } from "./errors/message_errors";
+import { kernel_send } from "./kernel_environment/send";
 
 export class RecieveAddressT extends Context.Tag("RecieveAddressT")<RecieveAddressT, Address>() { }
 
-export const recieve = pipe(
-    applyMiddlewareEffect,
-    Effect.provideServiceEffect(
-        AddressT,
-        RecieveAddressT
-    ),
-    Effect.provideServiceEffect(
-        LocalComputedMessageDataT,
-        justRecievedLocalComputedMessageData
-    ),
-    (c) => Effect.gen(function* (_) {
-        const interrupt = yield* _(c);
-        if (interrupt == MiddlewareInterrupt) {
-            return yield* _(Effect.void);
-        }
-        return yield* _(KernelEnv.send);
-    }),
-    Effect.provideServiceEffect(
-        MessageT,
-        Effect.gen(function* (_) {
-            const msg = yield* _(TransmittableMessageT);
-            return yield* msg.message;
-        })
+export const recieve:
+    Effect.Effect<void, MessageTransmissionError | InvalidMessageFormatError, RecieveAddressT | TransmittableMessageT> =
+    pipe(
+        applyMiddlewareEffect,
+        Effect.provideServiceEffect(
+            AddressT,
+            RecieveAddressT
+        ),
+        Effect.provideServiceEffect(
+            LocalComputedMessageDataT,
+            justRecievedLocalComputedMessageData
+        ),
+        Effect.andThen(interupt => {
+            if (interupt == MiddlewareInterrupt) {
+                return Effect.void;
+            }
+            return kernel_send;
+        }),
+        Effect.provideServiceEffect(
+            MessageT,
+            Effect.gen(function* (_) {
+                const msg = yield* _(TransmittableMessageT);
+                return yield* msg.message;
+            })
+        ),
+        Effect.catchTag("MessageDeserializationError", (err) =>
+            Effect.fail(new InvalidMessageFormatError({
+                message: new Message(Address.local_address, ""),
+                err: err,
+                descr: "The message to recieve had bad format."
+            }))
+        )
     )
-)

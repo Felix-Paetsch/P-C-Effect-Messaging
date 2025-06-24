@@ -1,8 +1,7 @@
-import { Data, Effect, Equal, Context, Option } from "effect";
+import { Data, Effect, Context, Option } from "effect";
 import { Address } from "./address";
 import { SerializedMessage, TransmittableMessageT, TransmittableMessage } from "./message";
 import { createEndpoint } from "./endpoints";
-import { applyMessageProcessingErrorListeners } from "./kernel_environment/listen";
 import { recieve, RecieveAddressT } from "./recieve";
 import { MessageTransmissionError } from "./errors/message_errors";
 import { CallbackRegistrationError } from "./errors/callback_registration";
@@ -43,10 +42,12 @@ export const registerCommunicationChannel = Effect.gen(function* (_) {
 
     const ep = yield* createEndpoint(communicationChannel);
 
+
     yield* Effect.try(() => {
         communicationChannel.recieve_cb(
-            Effect.provideService(recieve, RecieveAddressT, address).pipe(
-                Effect.tapError(e => applyMessageProcessingErrorListeners(e)),
+            recieve.pipe(
+                Effect.provideService(RecieveAddressT, address),
+                Effect.catchTag("InvalidMessageFormatError", () => Effect.void),
                 Effect.flip,
                 Effect.option
             )

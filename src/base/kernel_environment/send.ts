@@ -6,16 +6,16 @@ import { applyMiddlewareEffect } from "../apply_middleware_effect";
 import { MiddlewareInterrupt } from "../middleware";
 import { sendThroughCommunicationChannel } from "../communication_channel";
 import { LocalComputedMessageDataT, localComputedMessageDataWithUpdates, sendLocalComputedMessageData } from "../local_computed_message_data";
-import { MessageTransmissionError } from "../errors/message_errors";
 import { findEndpoint } from "../endpoints";
+import { InvalidMessageFormatError, MessageTransmissionError } from "../errors/message_errors";
 
 export class AddressNotFoundError extends Data.TaggedError("AddressNotFoundError")<{
     address: Address;
 }> { }
 
-export const kernel_send: Effect.Effect<void, MessageTransmissionError, MessageT> = Effect.gen(function* (_) {
+export const kernel_send: Effect.Effect<void, MessageTransmissionError | InvalidMessageFormatError, MessageT> = Effect.gen(function* (_) {
     const message = yield* _(MessageT);
-    console.log(message);
+    // console.log(message);
     const address = message.target;
 
     const endpoint = yield* _(findEndpoint(address));
@@ -60,6 +60,18 @@ export const kernel_send: Effect.Effect<void, MessageTransmissionError, MessageT
         Effect.gen(function* (_) {
             const message = yield* _(MessageT);
             return message.target;
+        })
+    ),
+    Effect.catchTag("MessageSerializationError", (e) =>
+        Effect.gen(function* (_) {
+            const message = yield* _(MessageT);
+            return Effect.fail(
+                new InvalidMessageFormatError({
+                    message: message,
+                    err: e,
+                    descr: "The message to send had bad format."
+                })
+            );
         })
     )
 );
