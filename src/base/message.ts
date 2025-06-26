@@ -1,13 +1,14 @@
 import { Context, Data, Effect, ParseResult, pipe, Schema } from "effect";
 import { Address } from "./address";
-import { CommunicationChannel } from "./communication_channels";
 
 export class MessageT extends Context.Tag("MessageT")<
     MessageT,
     Message
 >() { }
 
-export class MessageSerializationError extends Data.TaggedError("MessageSerializationError")<{}> { }
+export class MessageSerializationError extends Data.TaggedError("MessageSerializationError")<{
+    message: Message
+}> { }
 export class MessageDeserializationError extends Data.TaggedError("MessageDeserializationError")<{}> { }
 
 export type SerializedMessage = string & { readonly __brand: "SerializedMessage" };
@@ -30,10 +31,9 @@ export class Message {
     private msg_content: MessageContent;
 
     constructor(
-        public target: Address, // | Communicator,
+        public target: Address,
         content: string | { [key: string]: Json },
-        public meta_data: { [key: string]: Json } = {},
-        public prefered_communication_channel: CommunicationChannel | null = null
+        public meta_data: { [key: string]: Json } = {}
     ) {
         if (typeof content === "string") {
             this.msg_content = { serialized: content, deserialized: null };
@@ -46,14 +46,14 @@ export class Message {
         return Schema.encode(Message.MessageFromString)(this)
             .pipe(
                 Effect.map(serialized => serialized as SerializedMessage),
-                Effect.catchTag("ParseError", () => new MessageSerializationError())
+                Effect.mapError(() => new MessageSerializationError({ message: this }))
             )
     }
 
     static deserialize(serialized: SerializedMessage): Effect.Effect<Message, MessageDeserializationError> {
         return Schema.decode(Message.MessageFromString)(serialized)
             .pipe(
-                Effect.catchTag("ParseError", () => new MessageDeserializationError())
+                Effect.mapError(() => new MessageDeserializationError())
             )
     }
 
@@ -62,7 +62,7 @@ export class Message {
         return Effect.gen(function* (_) {
             if (this_msg.msg_content.serialized === null) {
                 if (this_msg.msg_content.deserialized === null) {
-                    return yield* _(Effect.fail(new MessageSerializationError()));
+                    return yield* _(Effect.fail(new MessageSerializationError({ message: this_msg })));
                 }
 
                 const serialized = yield* _(Schema.encode(transform_message_content)(this_msg.msg_content.deserialized));
@@ -70,7 +70,7 @@ export class Message {
             }
 
             return this_msg.msg_content.serialized!;
-        }).pipe(Effect.catchTag("ParseError", () => new MessageSerializationError()));
+        }).pipe(Effect.catchTag("ParseError", () => new MessageSerializationError({ message: this })));
 
     }
 
@@ -79,7 +79,7 @@ export class Message {
         return Effect.gen(function* (_) {
             if (this_msg.msg_content.deserialized === null) {
                 if (this_msg.msg_content.serialized === null) {
-                    return yield* _(Effect.fail(new MessageDeserializationError()));
+                    return yield* Effect.dieMessage("Both serialized and deserialized are null");
                 }
 
                 const deserialized = yield* _(Schema.decode(transform_message_content)(this_msg.msg_content.serialized));
@@ -87,11 +87,16 @@ export class Message {
             }
 
             return this_msg.msg_content.deserialized!;
-        }).pipe(Effect.catchTag("ParseError", () => new MessageDeserializationError()));
+        }).pipe(Effect.mapError(() => new MessageDeserializationError()));
     }
 
-    get content_string(): Effect.Effect<string, MessageDeserializationError> {
-        return this.content.pipe(Effect.map(content => JSON.stringify(content)));
+    get content_string(): Effect.Effect<string> {
+        if (this.msg_content.serialized) {
+            return Effect.succeed(this.msg_content.serialized!);
+        }
+        return Schema.encode(transform_message_content)(this.msg_content.deserialized!).pipe(
+            Effect.orDie
+        );
     }
 
     static content(msg: Message | string) {
@@ -161,6 +166,10 @@ export class TransmittableMessage {
 
     content: Effect.Effect<{ [key: string]: Json }, MessageDeserializationError> =
         this.message.pipe(Effect.flatMap(msg => msg.content));
+
+    has_deserialized_message(): boolean {
+        return this.msg instanceof Message;
+    }
 
     get message(): Effect.Effect<Message, MessageDeserializationError> {
         const self = this;

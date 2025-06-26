@@ -1,4 +1,4 @@
-import uuidv4, { UUID } from "./uuid";
+import { v4 as uuidv4 } from 'uuid';
 import { Data, Effect, ParseResult, Schema, Equal, Hash, Context } from "effect";
 
 export class AddressDeserializationError extends Data.TaggedError("AddressDeserializationError")<{
@@ -6,26 +6,26 @@ export class AddressDeserializationError extends Data.TaggedError("AddressDeseri
 }> { }
 export class AddressT extends Context.Tag("AddressT")<AddressT, Address>() { }
 
-export type SerializedAddress = `primary_id: ${UUID}\nsecondary_id: ${UUID}`
+export type SerializedAddress = `primary_id: ${string}\nsecondary_id: ${string}`
     & { readonly __brand: "SerializedAddress" };
 
 export class Address implements Equal.Equal {
-    readonly _primary_id: UUID;
-    readonly _secondary_id: UUID;
+    readonly _primary_id: string;
+    readonly _secondary_id: string;
 
     constructor(
-        primary_id: UUID = uuidv4(),
-        secondary_id: UUID = uuidv4()
+        primary_id: string = uuidv4(),
+        secondary_id: string = uuidv4()
     ) {
         this._primary_id = primary_id;
         this._secondary_id = secondary_id;
     }
 
-    get primary_id(): UUID {
+    get primary_id(): string {
         return this._primary_id;
     }
 
-    get secondary_id(): UUID {
+    get secondary_id(): string {
         return this._secondary_id;
     }
 
@@ -45,7 +45,8 @@ export class Address implements Equal.Equal {
     }
 
     serialize(): SerializedAddress {
-        return Schema.encodeSync(Address.AddressFromString)(this) as SerializedAddress;
+        const serialized: string = Schema.encodeSync(Address.AddressFromString)(this);
+        return serialized as SerializedAddress;
     }
 
     static deserialize(serialized: SerializedAddress): Effect.Effect<Address, AddressDeserializationError> {
@@ -58,8 +59,8 @@ export class Address implements Equal.Equal {
     static AddressFromString = Schema.transformOrFail(Schema.String, Schema.instanceOf(Address), {
         decode: (str: string, _, ast) => {
             const lines = str.split("\n");
-            const primary_id = lines[0].split(": ")[1] as UUID;
-            const secondary_id = lines[1].split(": ")[1] as UUID;
+            const primary_id = lines[0].split(": ")[1];
+            const secondary_id = lines[1].split(": ")[1];
             if (!primary_id || !secondary_id) {
                 return ParseResult.fail(new ParseResult.Type(ast, str, "Failed to deserialize address"));
             }
@@ -78,14 +79,14 @@ export class Address implements Equal.Equal {
         return this._local_address;
     }
 
-    static new_local_address = (secondary_id: UUID = uuidv4()) => {
+    static new_local_address = (secondary_id: string = uuidv4()) => {
         return new LocalAddress(secondary_id);
     }
 }
 
 export class LocalAddress extends Address {
     constructor(
-        secondary_id: UUID = uuidv4()
+        secondary_id: string = uuidv4()
     ) {
         super(Address.local_address.primary_id, secondary_id)
     }
