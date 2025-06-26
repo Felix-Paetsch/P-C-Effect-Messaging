@@ -33,7 +33,7 @@ export class BidirectionalMessageResultT extends Context.Tag("BidirectionalMessa
 
 export type ResponseEffect = Effect.Effect<
     Effect.Effect<Message, TimeoutError>,
-    MessageTransmissionError | EnvironmentInactiveError | InvalidMessageFormatError,
+    MessageTransmissionError | EnvironmentInactiveError,
     EnvironmentT
 >;
 
@@ -141,7 +141,7 @@ export const bidirectional_middleware = (
             }))
         );
 
-        const respond = respond_fn(message);
+        const respond = respond_fn(data);
         const bidirectional_message_context = Context.empty().pipe(
             Context.add(BidirectionalMessageResultT, { message: message, respond: respond }),
             Context.add(ResponseFunctionT, respond)
@@ -157,22 +157,15 @@ export const bidirectional_middleware = (
     }).pipe(Effect.ignore)
 );
 
-const respond_fn = (message: Message): ResponseFunction => {
+const respond_fn = (request_bidirectional_message_meta_data: typeof bidirectional_message_schema.Type): ResponseFunction => {
     return (content: string, meta_data: { [key: string]: any } = {}, new_timeout?: number): ResponseEffect => Effect.gen(function* (_) {
-        const bidirectional_message = message.meta_data.bidirectional_message;
         const {
             source,
             target,
             msg_uuid,
             timeout,
             created_at
-        } = yield* _(Schema.decodeUnknown(bidirectional_message_schema)(bidirectional_message)).pipe(
-            Effect.mapError((e) => new InvalidMessageFormatError({
-                message: message,
-                err: e,
-                descr: "Bidirectional message meta data has wrong format."
-            }))
-        );
+        } = request_bidirectional_message_meta_data;
 
         const res = new Message(source, content, {
             ...meta_data,

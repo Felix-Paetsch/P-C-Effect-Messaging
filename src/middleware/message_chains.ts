@@ -34,7 +34,7 @@ export class ChainMessageResultT extends Context.Tag("ChainMessageResultT")<
 
 export type ChainContinueEffect = Effect.Effect<
     Effect.Effect<ChainMessageResult, ChainTimeout, EnvironmentT>,
-    MessageTransmissionError | EnvironmentInactiveError | InvalidMessageFormatError,
+    MessageTransmissionError | EnvironmentInactiveError,
     EnvironmentT
 >;
 export type ResponseFunction = (
@@ -78,7 +78,16 @@ function get_message_promise_key(msg_chain_uid: string, current_msg_chain_length
     return `${msg_chain_uid}_${send === "send" ? current_msg_chain_length : current_msg_chain_length - 1}`;
 }
 
-const chain_message_promise_as_effect = (message: Message, chain_uid: string, timeout: number) => {
+const chain_message_promise_as_effect = (message: Message, chain_uid: string, timeout: number)
+    : Effect.Effect<ChainMessageResult, ChainTimeout, never> => {
+    if (timeout <= 0) {
+        return Effect.fail(new ChainTimeout({
+            timeout: timeout,
+            msg_chain_uid: chain_uid
+        }));
+    }
+
+
     const prom = chain_message_promise(message, chain_uid, timeout);
     return Effect.tryPromise(() => prom).pipe(
         Effect.mapError(_ => new ChainTimeout({
@@ -94,12 +103,12 @@ const chain_message_promise = (message: Message, chain_uid: string, timeout: num
         chain_queue[key] = {
             last_message: message,
             resolve: (res: ChainMessageResult) => {
-                resolve(res);
                 delete chain_queue[key];
+                resolve(res);
             },
             reject: (error: ChainTimeout) => {
-                reject(error);
                 delete chain_queue[key];
+                reject(error);
             }
         }
     });
@@ -142,7 +151,7 @@ export const chain_middleware = (
             }))
         );
 
-        const continue_chain = continue_chain_fn(message);
+        const continue_chain = continue_chain_fn(data);
         const chain_message_context = Context.empty().pipe(
             Context.add(ChainMessageResultT, { message: message, respond: continue_chain }),
             Context.add(ResponseFunctionT, continue_chain)
@@ -164,9 +173,8 @@ export const chain_middleware = (
     }).pipe(Effect.ignore)
 );
 
-const continue_chain_fn = (message: Message): ResponseFunction => {
+const continue_chain_fn = (request_chain_message_meta_data: typeof chain_message_schema.Type): ResponseFunction => {
     return (content: { [key: string]: Json }, meta_data: { [key: string]: any } = {}, new_timeout?: number): ChainContinueEffect => Effect.gen(function* (_) {
-        const chain_message = message.meta_data.chain_message;
         const {
             current_sender,
             current_reciever,
@@ -174,13 +182,7 @@ const continue_chain_fn = (message: Message): ResponseFunction => {
             current_msg_chain_length,
             timeout,
             created_at
-        } = yield* _(Schema.decodeUnknown(chain_message_schema)(chain_message)).pipe(
-            Effect.mapError((e) => new InvalidMessageFormatError({
-                message: message,
-                err: e,
-                descr: "Chain message meta data has wrong format."
-            }))
-        );
+        } = request_chain_message_meta_data;
 
         const res = new Message(current_sender, content, {
             ...meta_data,

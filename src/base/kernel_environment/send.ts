@@ -6,7 +6,7 @@ import { applyMiddlewareEffect } from "../apply_middleware_effect";
 import { MiddlewareInterrupt } from "../middleware";
 import { sendThroughCommunicationChannel } from "../communication_channel";
 import { LocalComputedMessageDataT, localComputedMessageDataWithUpdates, sendLocalComputedMessageData } from "../local_computed_message_data";
-import { findEndpoint } from "../endpoints";
+import { findEndpointOrFail } from "../endpoints";
 import { InvalidMessageFormatError, MessageTransmissionError } from "../errors/message_errors";
 
 export class AddressNotFoundError extends Data.TaggedError("AddressNotFoundError")<{
@@ -18,10 +18,17 @@ export const kernel_send: Effect.Effect<void, MessageTransmissionError | Invalid
     // console.log(message);
     const address = message.target;
 
-    const endpoint = yield* _(findEndpoint(address));
+    const endpoint = yield* _(findEndpointOrFail(address));
     const serialized_message = yield* message.serialize();
 
-    const interrupt = yield* applyMiddlewareEffect;
+    // Incomming to kernel
+    const interrupt = yield* applyMiddlewareEffect.pipe(
+        Effect.provideService(
+            AddressT,
+            Address.local_address
+        )
+    );
+
     if (interrupt == MiddlewareInterrupt) {
         return yield* _(Effect.void);
     }
@@ -30,14 +37,31 @@ export const kernel_send: Effect.Effect<void, MessageTransmissionError | Invalid
         return yield* _(applyListeners);
     }
 
+    // Outgoing from kernel
     const interrupt2 = yield* applyMiddlewareEffect.pipe(
+        localComputedMessageDataWithUpdates({
+            direction: "outgoing",
+            at_target: false
+        }),
+        Effect.provideService(
+            AddressT,
+            Address.local_address
+        )
+    );
+
+    if (interrupt2 == MiddlewareInterrupt) {
+        return yield* _(Effect.void);
+    }
+
+    // Outgoing via address
+    const interrupt3 = yield* applyMiddlewareEffect.pipe(
         localComputedMessageDataWithUpdates({
             direction: "outgoing",
             at_target: false
         })
     );
 
-    if (interrupt2 == MiddlewareInterrupt) {
+    if (interrupt3 == MiddlewareInterrupt) {
         return yield* _(Effect.void);
     }
 

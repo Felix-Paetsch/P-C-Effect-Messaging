@@ -1,6 +1,6 @@
 import { Effect } from "effect";
 import { Address } from "../base/address";
-import { Protocol, ProtocolError, ProtocolMessageT } from "./protocol";
+import { is_protocol_error, Protocol, ProtocolError, ProtocolErrorN, ProtocolMessageT } from "./protocol";
 import { Either } from "effect";
 
 export class PingProtocol extends Protocol<Either.Either<true, ProtocolError>, void> {
@@ -18,10 +18,10 @@ export class PingProtocol extends Protocol<Either.Either<true, ProtocolError>, v
             )
         }).pipe(
             Effect.mapError(e => {
-                if (e instanceof ProtocolError) {
+                if (is_protocol_error(e)) {
                     return e
                 }
-                return new ProtocolError({
+                return new ProtocolErrorN({
                     message: "ProtocolError",
                     error: e
                 });

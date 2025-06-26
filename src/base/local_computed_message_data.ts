@@ -9,7 +9,7 @@ export type LocalComputedMessageData = {
     /** 
      * The direction of message flow relative to the kernel
      * - "incoming": path to Kernel or at kernel for kernel-targeted messages
-     * - "outgoing": path from kernel or at kernel for non-kernel messages
+     * - "outgoing": path from kernel
      */
     direction: "incoming" | "outgoing";
     /** 

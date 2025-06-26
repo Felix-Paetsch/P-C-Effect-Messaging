@@ -17,16 +17,16 @@ export const recieve:
             AddressT,
             RecieveAddressT
         ),
-        Effect.provideServiceEffect(
-            LocalComputedMessageDataT,
-            justRecievedLocalComputedMessageData
-        ),
         Effect.andThen(interupt => {
             if (interupt == MiddlewareInterrupt) {
                 return Effect.void;
             }
             return kernel_send;
         }),
+        Effect.provideServiceEffect(
+            LocalComputedMessageDataT,
+            justRecievedLocalComputedMessageData
+        ),
         Effect.provideServiceEffect(
             MessageT,
             Effect.gen(function* (_) {

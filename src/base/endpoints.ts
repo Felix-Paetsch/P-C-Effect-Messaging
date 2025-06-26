@@ -1,7 +1,7 @@
 import { Address } from "./address";
 import { Middleware } from "./middleware";
 import { AddressAlreadyInUseError, CommunicationChannel, MessageChannelTransmissionError } from "./communication_channel";
-import { Equal, Effect } from "effect";
+import { Equal, Effect, Option, pipe } from "effect";
 import { AddressNotFoundError, kernel_send } from "./kernel_environment/send";
 import { MessageT, TransmittableMessageT } from "./message";
 import { CallbackRegistrationError } from "./errors/callback_registration";
@@ -44,9 +44,9 @@ export const createEndpoint = (communicationChannel: CommunicationChannel): Effe
         };
 
         yield* findEndpoint(communicationChannel.address).pipe(
-            Effect.flip,
-            Effect.mapError(_ => {
-                return new AddressAlreadyInUseError({ address: communicationChannel.address });
+            Option.match({
+                onNone: () => Effect.void,
+                onSome: () => Effect.fail(new AddressAlreadyInUseError({ address: communicationChannel.address }))
             })
         );
 
@@ -76,11 +76,11 @@ export const removeEndpoint = (address: Address): Effect.Effect<void, never, nev
         }
     });
 
-export const findEndpoint = (address: Address): Effect.Effect<Endpoint, AddressNotFoundError> =>
-    Effect.gen(function* (_) {
-        const endpoint = endpoints.find(endpoint => Equal.equals(endpoint.address, address));
-        if (!endpoint) {
-            return yield* _(Effect.fail(new AddressNotFoundError({ address })));
-        }
-        return endpoint;
-    })
+export const findEndpoint = (address: Address): Option.Option<Endpoint> =>
+    Option.fromNullable(endpoints.find(endpoint => Equal.equals(endpoint.address, address)));
+
+export const findEndpointOrFail = (address: Address): Effect.Effect<Endpoint, AddressNotFoundError> =>
+    pipe(
+        findEndpoint(address),
+        Effect.orElseFail(() => new AddressNotFoundError({ address }))
+    )
