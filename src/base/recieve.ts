@@ -36,9 +36,9 @@ export const recieve:
         ),
         Effect.catchTag("MessageDeserializationError", (err) =>
             Effect.fail(new InvalidMessageFormatError({
-                message: new Message(Address.local_address, ""),
-                err: err,
-                descr: "The message to recieve had bad format."
+                Message: new Message(Address.local_address, ""),
+                error: err,
+                data: "The message to recieve had bad format."
             }))
         )
     )

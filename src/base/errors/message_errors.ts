@@ -1,7 +1,7 @@
 import { Data } from "effect";
 import { MessageChannelTransmissionError } from "../communication_channel";
 import { AddressNotFoundError } from "../kernel_environment/send";
-import { Message } from "../message";
+import { Json, Message } from "../message";
 
 export type MessageTransmissionError =
     AddressNotFoundError
@@ -13,7 +13,8 @@ export function isMessageTransmissionError(e: Error): e is MessageTransmissionEr
 }
 
 export class InvalidMessageFormatError extends Data.TaggedError("InvalidMessageFormatError")<{
-    message: Message,
-    err: Error,
-    descr: string
+    message?: string,
+    error: Error,
+    data?: Json,
+    Message?: Message
 }> { }

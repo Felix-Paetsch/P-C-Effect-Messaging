@@ -60,7 +60,10 @@ export const registerCommunicationChannel = Effect.gen(function* (_) {
         const err = e instanceof Error ? e : new Error("Couldn't register receive callback");
         return Effect.all([
             ep.remove,
-            Effect.fail(new CallbackRegistrationError({ err })),
+            Effect.fail(new CallbackRegistrationError({
+                error: err,
+                message: "Couldn't register recieve callback"
+            })),
         ])
     }));
 

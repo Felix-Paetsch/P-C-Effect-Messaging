@@ -10,8 +10,25 @@ export class ProtocolErrorN extends Data.TaggedError("ProtocolError")<{
     message: string;
     error?: Error;
     data?: Json;
-    protocol_message?: ProtocolMessage;
+    Message?: ProtocolMessage;
 }> {
+    constructor(args: {
+        message: string,
+        data?: Json,
+        error?: Error,
+        Message?: ProtocolMessage
+    }) {
+        if (args.error instanceof ProtocolErrorR) {
+            return new ProtocolErrorR({
+                message: args.message || args.error.message,
+                error: args.error.error,
+                data: args.data || args.error.data,
+                Message: args.error.Message || args.error.Message!
+            });
+        }
+        super(args);
+    }
+
     serialize() {
         return Schema.encodeSync(ProtocolErrorN.ProtocolErrorFromJson)(this);
     }
@@ -21,7 +38,7 @@ export class ProtocolErrorN extends Data.TaggedError("ProtocolError")<{
             message: this.message,
             error: this.error,
             data: this.data,
-            protocol_message
+            Message: protocol_message
         })
     }
 
@@ -64,13 +81,13 @@ export class ProtocolErrorR extends ProtocolErrorN {
         message: string,
         data?: Json,
         error?: Error,
-        protocol_message: ProtocolMessage
+        Message: ProtocolMessage
     }) {
         super(args);
         if (this.error instanceof ProtocolErrorR) {
             return;
         }
-        this.protocol_message!.respond_error(this);
+        this.Message!.respond_error(this);
     }
 
     to_protocolErrorR() {
@@ -107,7 +124,7 @@ const ProtocolMetaDataSchema = Schema.Struct({
     })
 });
 
-export class Protocol<SenderResult, ReceiverResult> {
+export abstract class Protocol<SenderResult, ReceiverResult> {
     constructor(
         readonly protocol: string,
         readonly protocol_ident: Json,
@@ -120,14 +137,15 @@ export class Protocol<SenderResult, ReceiverResult> {
             {
                 message: "Not implemented",
                 data: {},
-                protocol_message: message
+                Message: message
             }
         ))
     })
 
     // Will be called if the first message reaches its target on the other side
-    protected on_first_request: Effect.Effect<void, ProtocolError, ProtocolMessageT>
-        = Protocol.not_implemented_error
+    get on_first_request(): Effect.Effect<void, ProtocolError, ProtocolMessageT> {
+        return Protocol.not_implemented_error
+    }
 
     // Send the first message
     protected send_first_message(address: Address, data: Json, timeout: number = 5000):
@@ -222,14 +240,14 @@ export class Protocol<SenderResult, ReceiverResult> {
             const content = yield* msg.content.pipe(
                 Effect.mapError(e => new ProtocolErrorR({
                     message: "Invalid message content",
-                    protocol_message: unsanatizedProtocolMessage
+                    Message: unsanatizedProtocolMessage
                 }))
             );
 
             if (!content.hasOwnProperty('data')) {
                 return yield* Effect.fail(new ProtocolErrorR({
                     message: "Message content missing 'data' attribute",
-                    protocol_message: unsanatizedProtocolMessage
+                    Message: unsanatizedProtocolMessage
                 }));
             }
 
@@ -237,7 +255,7 @@ export class Protocol<SenderResult, ReceiverResult> {
             if (Option.isNone(protocol_meta_data)) {
                 return yield* Effect.fail(new ProtocolErrorR({
                     message: "Invalid protocol meta data",
-                    protocol_message: unsanatizedProtocolMessage
+                    Message: unsanatizedProtocolMessage
                 }));
             }
 
@@ -308,6 +326,7 @@ export class Protocol<SenderResult, ReceiverResult> {
     on(cb: (result: ReceiverResult) => Effect.Effect<void, never, never>): void {
         this.on_callback = cb;
     }
+
     protected on_callback: (result: ReceiverResult) => Effect.Effect<void, never, never> = () => Effect.void;
 
     static get_protocol_meta_data = (meta_data: { [key: string]: Json }) =>

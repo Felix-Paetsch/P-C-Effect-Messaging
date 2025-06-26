@@ -135,9 +135,9 @@ export const bidirectional_middleware = (
 
         const data = yield* _(Schema.decodeUnknown(bidirectional_message_schema)(bidirectional_message)).pipe(
             Effect.mapError((e) => new InvalidMessageFormatError({
-                message: message,
-                err: e,
-                descr: "Bidirectional message meta data has wrong format."
+                Message: message,
+                error: e,
+                message: "Bidirectional message meta data has wrong format."
             }))
         );
 

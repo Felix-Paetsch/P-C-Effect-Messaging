@@ -33,7 +33,10 @@ export const listen = Effect.gen(function* (_) {
             const err = e instanceof Error ? e : new Error("Couldn't register remove callback");
             return Effect.all([
                 remove_effect,
-                Effect.fail(new CallbackRegistrationError({ err })),
+                Effect.fail(new CallbackRegistrationError({
+                    message: "Couldn't register remove callback",
+                    error: err
+                })),
             ])
         }));
     }
@@ -51,12 +54,14 @@ export const applyListeners = Effect.gen(function* (_) {
 // ============
 
 export class MessageProcessingError extends Data.TaggedError("MessageProcessingError")<{
-    err: Error;
+    error: Error;
 }> { }
 
 export class MessageProcessingErrorT extends Context.Tag("MessageProcessingErrorT")<MessageProcessingErrorT, {
-    MessageProcessingError: MessageProcessingError;
-    SerializedMessage: SerializedMessage | null;
+    error: MessageProcessingError;
+    data: {
+        serialized: SerializedMessage
+    } | null;
     Message: Message | null;
 }>() { }
 
@@ -90,7 +95,10 @@ export const listenMessageProcessingError = Effect.gen(function* (_) {
             const err = e instanceof Error ? e : new Error("Couldn't register remove callback");
             return Effect.all([
                 remove_effect,
-                Effect.fail(new CallbackRegistrationError({ err })),
+                Effect.fail(new CallbackRegistrationError({
+                    message: "Couldn't register remove callback",
+                    error: err
+                })),
             ])
         }));
     }
@@ -112,8 +120,10 @@ export const applyMessageProcessingErrorListeners = (e: Error) => Effect.gen(fun
         const serialized_msg = Option.isNone(serialized_msgO) ? null : serialized_msgO.value;
 
         return {
-            MessageProcessingError: new MessageProcessingError({ err: e }),
-            SerializedMessage: serialized_msg,
+            error: new MessageProcessingError({
+                error: e
+            }),
+            data: serialized_msg ? { serialized: serialized_msg } : null,
             Message: msg
         }
     })),

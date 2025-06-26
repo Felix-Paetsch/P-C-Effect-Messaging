@@ -30,12 +30,14 @@ export class PingProtocol extends Protocol<Either.Either<true, ProtocolError>, v
         )
     }
 
-    protected on_first_request = Effect.gen(function* (_) {
-        const msg = yield* _(ProtocolMessageT);
-        yield* msg.respond("Pong").pipe(
-            Effect.ignore
-        );
-    })
+    get on_first_request() {
+        return Effect.gen(function* (_) {
+            const msg = yield* _(ProtocolMessageT);
+            yield* msg.respond("Pong").pipe(
+                Effect.ignore
+            );
+        })
+    }
 }
 
 export const Ping = new PingProtocol();

@@ -58,7 +58,10 @@ export const createEndpoint = (communicationChannel: CommunicationChannel): Effe
                     const err = e instanceof Error ? e : new Error("Couldn't register remove callback");
                     return Effect.all([
                         new_endpoint.remove,
-                        Effect.fail(new CallbackRegistrationError({ err })),
+                        Effect.fail(new CallbackRegistrationError({
+                            error: err,
+                            message: "Couldn't register remove callback"
+                        })),
                     ])
                 })
             );

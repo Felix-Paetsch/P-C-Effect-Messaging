@@ -91,9 +91,9 @@ export const kernel_send: Effect.Effect<void, MessageTransmissionError | Invalid
             const message = yield* _(MessageT);
             return Effect.fail(
                 new InvalidMessageFormatError({
-                    message: message,
-                    err: e,
-                    descr: "The message to send had bad format."
+                    Message: message,
+                    error: e,
+                    message: "The message to send had bad format."
                 })
             );
         })

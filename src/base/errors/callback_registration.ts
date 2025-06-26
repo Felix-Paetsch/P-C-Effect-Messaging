@@ -1,5 +1,6 @@
 import { Data } from "effect";
 
 export class CallbackRegistrationError extends Data.TaggedError("CallbackRegistrationError")<{
-    err: Error;
+    message: string;
+    error: Error;
 }> { }
