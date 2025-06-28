@@ -70,19 +70,19 @@ export const make_message_chain = (
         created_at: new Date()
     }).pipe(Effect.orDie));
 
-    return yield* chain_message_promise(message, chain_uid, timeout);
+    return yield* make_chain_message_promise(message, chain_uid, timeout);
 });
 
 function get_message_promise_key(msg_chain_uid: string, current_msg_chain_length: number, send: "send" | "recieve") {
     return `${msg_chain_uid}_${send === "send" ? current_msg_chain_length : current_msg_chain_length - 1}`;
 }
 
-const chain_message_promise = (message: Message, chain_uid: string, timeout: number) => Effect.gen(function* (_) {
+const make_chain_message_promise = (message: Message, chain_uid: string, timeout: number) => Effect.gen(function* (_) {
     const key = get_message_promise_key(chain_uid, (message as any).meta_data?.chain_message?.current_msg_chain_length ?? 0, "send");
     const deferred = yield* _(Deferred.make<ChainMessageResult, never>());
     const timeout_duration = Duration.millis(timeout);
     const deferred_with_timeout = deferred.pipe(
-        Effect.timeout(timeout_duration),
+        //Effect.timeout(timeout_duration),
         Effect.mapError(() => new ChainTimeout({
             timeout: timeout,
             msg_chain_uid: chain_uid
@@ -94,7 +94,6 @@ const chain_message_promise = (message: Message, chain_uid: string, timeout: num
         on_chain_message_result: (cmr: ChainMessageResult) => {
             return pipe(
                 Deferred.succeed(deferred, cmr),
-                Effect.tap(() => Effect.log("RESOLVING PROMISE")),
                 Effect.ensuring(Effect.suspend(
                     () => Effect.succeed(delete chain_queue[key])
                 ))
@@ -117,7 +116,6 @@ export const chain_middleware = (
     should_process_message: Effect.Effect<boolean, never, MessageT | LocalComputedMessageDataT> = Effect.succeed(true)
 ) => guard_at_target(
     Effect.gen(function* (_) {
-        console.log("==============================================");
         const message = yield* _(MessageT);
         const chain_message = message.meta_data.chain_message;
 
@@ -185,7 +183,7 @@ const continue_chain_fn = (request_chain_message_meta_data: typeof chain_message
         const send = (yield* EnvironmentT).send;
         yield* send.pipe(Effect.provideService(MessageT, res));
 
-        return yield* chain_message_promise(res, msg_chain_uid, new_timeout ?? timeout);
+        return yield* make_chain_message_promise(res, msg_chain_uid, new_timeout ?? timeout);
     });
 }
 
