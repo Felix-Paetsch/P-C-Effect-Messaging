@@ -85,7 +85,9 @@ export class ProtocolErrorR extends ProtocolErrorN {
     }) {
         super(args);
         if (this.Message && !this.Message.has_responded) {
-            this.Message.respond_error(this);
+            this.Message.respond_error(this).pipe(
+                Effect.runPromise
+            );
         }
     }
 
@@ -108,7 +110,7 @@ type ProtocolMessageRespond = (data: Json, timeout?: number, is_error?: boolean)
 
 export type ProtocolMessage = Message & {
     readonly respond: ProtocolMessageRespond,
-    readonly respond_error: (error: ProtocolErrorR) => void,
+    readonly respond_error: (error: ProtocolErrorR) => Effect.Effect<void, never, never>,
     data: Json,
     has_responded: boolean
 }
@@ -143,7 +145,7 @@ export abstract class Protocol<SenderResult, ReceiverResult> {
     })
 
     // Will be called if the first message reaches its target on the other side
-    get on_first_request(): Effect.Effect<void, ProtocolError, ProtocolMessageT> {
+    get on_first_request(): Effect.Effect<void, ProtocolError, ProtocolMessageT | EnvironmentT> {
         return Protocol.not_implemented_error
     }
 
@@ -238,8 +240,7 @@ export abstract class Protocol<SenderResult, ReceiverResult> {
             const respond_error: ProtocolMessage["respond_error"] = (err) =>
                 pipe(
                     respond(err.serialize(), undefined, true),
-                    Effect.ignore,
-                    Effect.runPromise
+                    Effect.ignore
                 );
 
             const unsanatizedProtocolMessage: ProtocolMessage = Object.assign(msg, {

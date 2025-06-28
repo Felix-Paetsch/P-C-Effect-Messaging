@@ -1,4 +1,4 @@
-import { Effect, Schema, Data, Context } from "effect";
+import { Effect, Schema, Data, Context, Deferred, Duration, Schedule, pipe } from "effect";
 import { Json, Message, MessageT } from "../base/message";
 import { Address } from "../base/address";
 import { Middleware, MiddlewareContinue, MiddlewareInterrupt } from "../base/middleware";
@@ -50,8 +50,7 @@ export class ResponseFunctionT extends Context.Tag("ResponseFunctionT")<
 const chain_queue: {
     [key: string]: {
         last_message: Message,
-        resolve: (res: ChainMessageResult) => void,
-        reject: (error: ChainTimeout) => void
+        on_chain_message_result: (cmr: ChainMessageResult) => Effect.Effect<void, never, never>
     }
 } = {};
 
@@ -71,61 +70,46 @@ export const make_message_chain = (
         created_at: new Date()
     }).pipe(Effect.orDie));
 
-    return chain_message_promise_as_effect(message, chain_uid, timeout);
+    return yield* chain_message_promise(message, chain_uid, timeout);
 });
 
 function get_message_promise_key(msg_chain_uid: string, current_msg_chain_length: number, send: "send" | "recieve") {
     return `${msg_chain_uid}_${send === "send" ? current_msg_chain_length : current_msg_chain_length - 1}`;
 }
 
-const chain_message_promise_as_effect = (message: Message, chain_uid: string, timeout: number)
-    : Effect.Effect<ChainMessageResult, ChainTimeout, never> => {
-    if (timeout <= 0) {
-        return Effect.fail(new ChainTimeout({
-            timeout: timeout,
-            msg_chain_uid: chain_uid
-        }));
-    }
-
-
-    const prom = chain_message_promise(message, chain_uid, timeout);
-    return Effect.tryPromise(() => prom).pipe(
-        Effect.mapError(_ => new ChainTimeout({
+const chain_message_promise = (message: Message, chain_uid: string, timeout: number) => Effect.gen(function* (_) {
+    const key = get_message_promise_key(chain_uid, (message as any).meta_data?.chain_message?.current_msg_chain_length ?? 0, "send");
+    const deferred = yield* _(Deferred.make<ChainMessageResult, never>());
+    const timeout_duration = Duration.millis(timeout);
+    const deferred_with_timeout = deferred.pipe(
+        Effect.timeout(timeout_duration),
+        Effect.mapError(() => new ChainTimeout({
             timeout: timeout,
             msg_chain_uid: chain_uid
         }))
+    );
+
+    chain_queue[key] = {
+        last_message: message,
+        on_chain_message_result: (cmr: ChainMessageResult) => {
+            return pipe(
+                Deferred.succeed(deferred, cmr),
+                Effect.tap(() => Effect.log("RESOLVING PROMISE")),
+                Effect.ensuring(Effect.suspend(
+                    () => Effect.succeed(delete chain_queue[key])
+                ))
+            );
+        }
+    }
+
+    yield* Schedule.run(
+        Schedule.addDelay(Schedule.once, () => timeout_duration),
+        Date.now(),
+        Effect.suspend(() => Effect.succeed(delete chain_queue[key]))
     )
-}
 
-const chain_message_promise = (message: Message, chain_uid: string, timeout: number) => {
-    const key = get_message_promise_key(chain_uid, (message as any).meta_data?.chain_message?.current_msg_chain_length ?? 0, "send");
-    const prom = new Promise<ChainMessageResult>((resolve, reject) => {
-        chain_queue[key] = {
-            last_message: message,
-            resolve: (res: ChainMessageResult) => {
-                delete chain_queue[key];
-                resolve(res);
-            },
-            reject: (error: ChainTimeout) => {
-                delete chain_queue[key];
-                reject(error);
-            }
-        }
-    });
-
-    // Supress warnings
-    prom.catch(() => { });
-    setTimeout(() => {
-        if (chain_queue[key]) {
-            chain_queue[key].reject(new ChainTimeout({
-                timeout: timeout,
-                msg_chain_uid: chain_uid
-            }));
-        }
-    }, timeout);
-
-    return prom;
-}
+    return deferred_with_timeout;
+});
 
 export const chain_middleware = (
     on_first_request: Effect.Effect<void, never, MessageT | ResponseFunctionT | ChainMessageResultT | LocalComputedMessageDataT>,
@@ -133,6 +117,7 @@ export const chain_middleware = (
     should_process_message: Effect.Effect<boolean, never, MessageT | LocalComputedMessageDataT> = Effect.succeed(true)
 ) => guard_at_target(
     Effect.gen(function* (_) {
+        console.log("==============================================");
         const message = yield* _(MessageT);
         const chain_message = message.meta_data.chain_message;
 
@@ -145,9 +130,9 @@ export const chain_middleware = (
 
         const data = yield* _(Schema.decodeUnknown(chain_message_schema)(chain_message)).pipe(
             Effect.mapError((e) => new InvalidMessageFormatError({
-                message: message,
-                err: e,
-                descr: "Chain message meta data has wrong format."
+                Message: message,
+                error: e,
+                message: "Chain message meta data has wrong format."
             }))
         );
 
@@ -160,10 +145,11 @@ export const chain_middleware = (
         yield* process_message.pipe(Effect.provide(chain_message_context));
 
         const promise_key = get_message_promise_key(data.msg_chain_uid, data.current_msg_chain_length, "recieve");
+
         if (data.current_msg_chain_length === 1) {
             yield* on_first_request.pipe(Effect.provide(chain_message_context));
         } else if (chain_queue[promise_key]) {
-            chain_queue[promise_key].resolve({
+            yield* chain_queue[promise_key].on_chain_message_result({
                 message: message,
                 respond: continue_chain
             });
@@ -199,7 +185,7 @@ const continue_chain_fn = (request_chain_message_meta_data: typeof chain_message
         const send = (yield* EnvironmentT).send;
         yield* send.pipe(Effect.provideService(MessageT, res));
 
-        return chain_message_promise_as_effect(res, msg_chain_uid, new_timeout ?? timeout);
+        return yield* chain_message_promise(res, msg_chain_uid, new_timeout ?? timeout);
     });
 }
 
