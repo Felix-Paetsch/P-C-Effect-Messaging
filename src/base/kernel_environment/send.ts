@@ -13,12 +13,12 @@ export class AddressNotFoundError extends Data.TaggedError("AddressNotFoundError
     address: Address;
 }> { }
 
-export const kernel_send: Effect.Effect<void, MessageTransmissionError | InvalidMessageFormatError, MessageT> = Effect.gen(function* (_) {
-    const message = yield* _(MessageT);
+export const kernel_send: Effect.Effect<void, MessageTransmissionError | InvalidMessageFormatError, MessageT> = Effect.gen(function* () {
+    const message = yield* MessageT;
     console.log(message);
     const address = message.target;
 
-    const endpoint = yield* _(findEndpointOrFail(address));
+    const endpoint = yield* findEndpointOrFail(address);
     const serialized_message = yield* message.serialize();
 
     // Incomming to kernel
@@ -30,11 +30,11 @@ export const kernel_send: Effect.Effect<void, MessageTransmissionError | Invalid
     );
 
     if (interrupt == MiddlewareInterrupt) {
-        return yield* _(Effect.void);
+        return yield* Effect.void;
     }
 
     if (Equal.equals(address, Address.local_address)) {
-        return yield* _(applyListeners);
+        return yield* applyListeners;
     }
 
     // Outgoing from kernel
@@ -50,7 +50,7 @@ export const kernel_send: Effect.Effect<void, MessageTransmissionError | Invalid
     );
 
     if (interrupt2 == MiddlewareInterrupt) {
-        return yield* _(Effect.void);
+        return yield* Effect.void;
     }
 
     // Outgoing via address
@@ -62,16 +62,14 @@ export const kernel_send: Effect.Effect<void, MessageTransmissionError | Invalid
     );
 
     if (interrupt3 == MiddlewareInterrupt) {
-        return yield* _(Effect.void);
+        return yield* Effect.void;
     }
 
-    return yield* _(
-        pipe(
-            sendThroughCommunicationChannel(endpoint.communicationChannel, serialized_message),
-            Effect.provideService(
-                SerializedMessageT,
-                serialized_message
-            )
+    return yield* pipe(
+        sendThroughCommunicationChannel(endpoint.communicationChannel, serialized_message),
+        Effect.provideService(
+            SerializedMessageT,
+            serialized_message
         )
     );
 }).pipe(
@@ -81,14 +79,14 @@ export const kernel_send: Effect.Effect<void, MessageTransmissionError | Invalid
     ),
     Effect.provideServiceEffect(
         AddressT,
-        Effect.gen(function* (_) {
-            const message = yield* _(MessageT);
+        Effect.gen(function* () {
+            const message = yield* MessageT;
             return message.target;
         })
     ),
     Effect.catchTag("MessageSerializationError", (e) =>
-        Effect.gen(function* (_) {
-            const message = yield* _(MessageT);
+        Effect.gen(function* () {
+            const message = yield* MessageT;
             return Effect.fail(
                 new InvalidMessageFormatError({
                     Message: message,

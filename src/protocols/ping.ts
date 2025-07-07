@@ -31,8 +31,8 @@ export class PingProtocol extends Protocol<Either.Either<true, ProtocolError>, v
     }
 
     get on_first_request() {
-        return Effect.gen(function* (_) {
-            const msg = yield* _(ProtocolMessageT);
+        return Effect.gen(function* () {
+            const msg = yield* ProtocolMessageT;
             yield* msg.respond("Pong").pipe(
                 Effect.ignore
             );

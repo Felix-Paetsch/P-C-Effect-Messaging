@@ -57,18 +57,18 @@ const chain_queue: {
 export const make_message_chain = (
     message: Message,
     timeout: number = 5000
-) => Effect.gen(function* (_) {
+) => Effect.gen(function* () {
     const chain_uid = uuidv4();
-    const env = yield* _(EnvironmentT);
+    const env = yield* EnvironmentT;
 
-    message.meta_data.chain_message = yield* _(Schema.encode(chain_message_schema)({
+    message.meta_data.chain_message = yield* Schema.encode(chain_message_schema)({
         current_sender: env.ownAddress,
         current_reciever: message.target,
         msg_chain_uid: chain_uid,
         current_msg_chain_length: 1,
         timeout: timeout,
         created_at: new Date()
-    }).pipe(Effect.orDie));
+    }).pipe(Effect.orDie);
 
     return yield* make_chain_message_promise(message, chain_uid, timeout);
 });
@@ -77,9 +77,9 @@ function get_message_promise_key(msg_chain_uid: string, current_msg_chain_length
     return `${msg_chain_uid}_${send === "send" ? current_msg_chain_length : current_msg_chain_length - 1}`;
 }
 
-const make_chain_message_promise = (message: Message, chain_uid: string, timeout: number) => Effect.gen(function* (_) {
+const make_chain_message_promise = (message: Message, chain_uid: string, timeout: number) => Effect.gen(function* () {
     const key = get_message_promise_key(chain_uid, (message as any).meta_data?.chain_message?.current_msg_chain_length ?? 0, "send");
-    const deferred = yield* _(Deferred.make<ChainMessageResult, never>());
+    const deferred = yield* Deferred.make<ChainMessageResult, never>();
     const timeout_duration = Duration.millis(timeout);
     const deferred_with_timeout = deferred.pipe(
         //Effect.timeout(timeout_duration),
@@ -115,8 +115,8 @@ export const chain_middleware = (
     process_message: Effect.Effect<void, never, MessageT | ResponseFunctionT | ChainMessageResultT | LocalComputedMessageDataT>,
     should_process_message: Effect.Effect<boolean, never, MessageT | LocalComputedMessageDataT> = Effect.succeed(true)
 ) => guard_at_target(
-    Effect.gen(function* (_) {
-        const message = yield* _(MessageT);
+    Effect.gen(function* () {
+        const message = yield* MessageT;
         const chain_message = message.meta_data.chain_message;
 
         if (
@@ -126,7 +126,7 @@ export const chain_middleware = (
             return MiddlewareContinue;
         }
 
-        const data = yield* _(Schema.decodeUnknown(chain_message_schema)(chain_message)).pipe(
+        const data = yield* Schema.decodeUnknown(chain_message_schema)(chain_message).pipe(
             Effect.mapError((e) => new InvalidMessageFormatError({
                 Message: message,
                 error: e,
@@ -158,7 +158,7 @@ export const chain_middleware = (
 );
 
 const continue_chain_fn = (request_chain_message_meta_data: typeof chain_message_schema.Type): ResponseFunction => {
-    return (content: { [key: string]: Json }, meta_data: { [key: string]: any } = {}, new_timeout?: number): ChainContinueEffect => Effect.gen(function* (_) {
+    return (content: { [key: string]: Json }, meta_data: { [key: string]: any } = {}, new_timeout?: number): ChainContinueEffect => Effect.gen(function* () {
         const {
             current_sender,
             current_reciever,
@@ -197,8 +197,8 @@ export const id_chain_middleware = (
     const mw = chain_middleware(
         on_first_request,
         process_message,
-        Effect.gen(function* (_) {
-            const message = yield* _(MessageT);
+        Effect.gen(function* () {
+            const message = yield* MessageT;
             return (message.meta_data as any).chain_message?.chain_middleware_id === id;
         })
     );

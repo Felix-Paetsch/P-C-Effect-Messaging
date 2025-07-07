@@ -59,13 +59,13 @@ export class Message {
 
     get serialized_content(): Effect.Effect<string, MessageSerializationError> {
         const this_msg = this;
-        return Effect.gen(function* (_) {
+        return Effect.gen(function* () {
             if (this_msg.msg_content.serialized === null) {
                 if (this_msg.msg_content.deserialized === null) {
                     return yield* new MessageSerializationError({ message: this_msg });
                 }
 
-                const serialized = yield* _(Schema.encode(transform_message_content)(this_msg.msg_content.deserialized));
+                const serialized = yield* Schema.encode(transform_message_content)(this_msg.msg_content.deserialized);
                 this_msg.msg_content.serialized = serialized;
             }
 
@@ -76,13 +76,13 @@ export class Message {
 
     get content(): Effect.Effect<{ [key: string]: Json }, MessageDeserializationError> {
         const this_msg = this;
-        return Effect.gen(function* (_) {
+        return Effect.gen(function* () {
             if (this_msg.msg_content.deserialized === null) {
                 if (this_msg.msg_content.serialized === null) {
                     return yield* Effect.dieMessage("Both serialized and deserialized are null");
                 }
 
-                const deserialized = yield* _(Schema.decode(transform_message_content)(this_msg.msg_content.serialized));
+                const deserialized = yield* Schema.decode(transform_message_content)(this_msg.msg_content.serialized);
                 this_msg.msg_content.deserialized = deserialized;
             }
 
@@ -100,9 +100,9 @@ export class Message {
     }
 
     static content(msg: Message | string) {
-        return Effect.gen(function* (_) {
+        return Effect.gen(function* () {
             if (typeof msg === "string") {
-                const msg_obj = yield* _(Message.deserialize(msg as SerializedMessage));
+                const msg_obj = yield* Message.deserialize(msg as SerializedMessage);
                 return yield* msg_obj.content;
             }
 
@@ -119,14 +119,14 @@ export class Message {
                         new ParseResult.Type(ast, str, `Failed to parse JSON: ${e instanceof Error ? e.message : String(e)}`)
                     );
                 }),
-                Effect.andThen((json) => Effect.gen(function* (_) {
-                    const target_str = yield* _(Schema.decode(Schema.String)(json.target));
-                    const content = yield* _(Schema.decode(Schema.String)(json.content));
-                    const meta_data = yield* _(Schema.decode(Schema.Record({
+                Effect.andThen((json) => Effect.gen(function* () {
+                    const target_str = yield* Schema.decode(Schema.String)(json.target);
+                    const content = yield* Schema.decode(Schema.String)(json.content);
+                    const meta_data = yield* Schema.decode(Schema.Record({
                         key: Schema.String,
                         value: Schema.Any
-                    }))(json.meta_data));
-                    const target = yield* _(Schema.decode(Address.AddressFromString)(target_str));
+                    }))(json.meta_data);
+                    const target = yield* Schema.decode(Address.AddressFromString)(target_str);
                     return new Message(target, content, meta_data)
                 })),
                 Effect.catchAll(e => {
@@ -173,21 +173,21 @@ export class TransmittableMessage {
 
     get message(): Effect.Effect<Message, MessageDeserializationError> {
         const self = this;
-        return Effect.gen(function* (_) {
+        return Effect.gen(function* () {
             if (self.msg instanceof Message) {
                 return self.msg;
             }
 
-            self.msg = yield* _(Message.deserialize(self.msg));
+            self.msg = yield* Message.deserialize(self.msg);
             return self.msg;
         })
     }
 
     get string(): Effect.Effect<SerializedMessage, MessageSerializationError> {
         const self = this;
-        return Effect.gen(function* (_) {
+        return Effect.gen(function* () {
             if (self.msg instanceof Message) {
-                return yield* _(self.msg.serialize());
+                return yield* self.msg.serialize();
             }
 
             return self.msg;
@@ -196,12 +196,12 @@ export class TransmittableMessage {
 
     get address(): Effect.Effect<Address, MessageDeserializationError> {
         const self = this;
-        return Effect.gen(function* (_) {
+        return Effect.gen(function* () {
             if (typeof self.msg === "string" && self.addr) {
                 return self.addr;
             }
 
-            return yield* _(self.message.pipe(Effect.map(msg => msg.target)));
+            return yield* self.message.pipe(Effect.map(msg => msg.target));
         })
     }
 }

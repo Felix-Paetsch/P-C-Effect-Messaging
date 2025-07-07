@@ -34,8 +34,8 @@ export class LocalComputedMessageDataT extends Context.Tag("LocalComputedMessage
  * Creates message data for a message that was just sent locally via send()
  * @returns Effect producing LocalComputedMessageData
  */
-export const justSentLocalComputedMessageData = Effect.gen(function* (_) {
-    const message = yield* _(MessageT);
+export const justSentLocalComputedMessageData = Effect.gen(function* () {
+    const message = yield* MessageT;
     return {
         direction: Equal.equals(message.target, Address.local_address) ? "incoming" : "outgoing",
         at_target: Equal.equals(message.target, Address.local_address),
@@ -47,9 +47,9 @@ export const justSentLocalComputedMessageData = Effect.gen(function* (_) {
  * Creates message data for a message being sent, building upon the data from message receipt
  * @returns Effect producing LocalComputedMessageData
  */
-const sendRecievedLocalComputedMessageData = Effect.gen(function* (_) {
-    const message = yield* _(MessageT);
-    const computed_data = yield* _(LocalComputedMessageDataT);
+const sendRecievedLocalComputedMessageData = Effect.gen(function* () {
+    const message = yield* MessageT;
+    const computed_data = yield* LocalComputedMessageDataT;
     computed_data.direction = Equal.equals(message.target, Address.local_address)
         ? "incoming" : "outgoing";
     computed_data.at_source = false;
@@ -60,7 +60,7 @@ const sendRecievedLocalComputedMessageData = Effect.gen(function* (_) {
  * Creates message data for a message being sent, optionally building upon existing receipt data
  * @returns Effect producing LocalComputedMessageData
  */
-export const sendLocalComputedMessageData = Effect.gen(function* (_) {
+export const sendLocalComputedMessageData = Effect.gen(function* () {
     const maybeExistingLocalMessageData = yield* Effect.serviceOption(LocalComputedMessageDataT)
     if (Option.isNone(maybeExistingLocalMessageData)) {
         return yield* justSentLocalComputedMessageData;
@@ -77,7 +77,7 @@ export const sendLocalComputedMessageData = Effect.gen(function* (_) {
  * Creates message data for a message that was just received at a communicator
  * @returns Effect producing LocalComputedMessageData
  */
-export const justRecievedLocalComputedMessageData = Effect.gen(function* (_) {
+export const justRecievedLocalComputedMessageData = Effect.gen(function* () {
     const res: LocalComputedMessageData = {
         direction: "incoming",
         at_target: false,
@@ -96,8 +96,8 @@ export const localComputedMessageDataWithUpdates = (updates: Partial<LocalComput
         program,
         LocalComputedMessageDataT,
         Effect.gen(
-            function* (_) {
-                const data = yield* _(LocalComputedMessageDataT);
+            function* () {
+                const data = yield* LocalComputedMessageDataT;
                 return { ...data, ...updates };
             }
         )

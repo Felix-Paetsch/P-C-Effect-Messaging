@@ -29,8 +29,8 @@ export const recieve:
         ),
         Effect.provideServiceEffect(
             MessageT,
-            Effect.gen(function* (_) {
-                const msg = yield* _(TransmittableMessageT);
+            Effect.gen(function* () {
+                const msg = yield* TransmittableMessageT;
                 return yield* msg.message;
             })
         ),

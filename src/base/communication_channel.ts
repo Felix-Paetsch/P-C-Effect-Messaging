@@ -36,8 +36,8 @@ export const sendThroughCommunicationChannel = (
     );
 }
 
-export const registerCommunicationChannel = Effect.gen(function* (_) {
-    const communicationChannel = yield* _(CommunicationChannelT);
+export const registerCommunicationChannel = Effect.gen(function* () {
+    const communicationChannel = yield* CommunicationChannelT;
     const address = communicationChannel.address;
 
     const ep = yield* createEndpoint(communicationChannel);
@@ -67,5 +67,5 @@ export const registerCommunicationChannel = Effect.gen(function* (_) {
         ])
     }));
 
-    return yield* _(Effect.void);
+    return yield* Effect.void;
 });

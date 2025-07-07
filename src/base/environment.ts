@@ -39,11 +39,11 @@ export const createLocalEnvironment = (
     let _onMessageForKernelRecieved: Effect.Effect<void, AddressNotFoundError | MessageChannelTransmissionError, TransmittableMessageT> = Effect.void;
     let remove_effect: Effect.Effect<void, never, never> = Effect.void;
     let active: boolean = true;
-    const guard_is_active = Effect.gen(function* (_) {
+    const guard_is_active = Effect.gen(function* () {
         if (!active) {
             return yield* new EnvironmentInactiveError({ address: ownAddress });
         }
-        return yield* _(Effect.void);
+        return yield* Effect.void;
     });
 
     const communication_channel: CommunicationChannel = {
@@ -108,16 +108,16 @@ export const createLocalEnvironment = (
     return res;
 });
 
-const at_source_middleware = Effect.gen(function* (_) {
-    const local_computed_message_data = yield* _(LocalComputedMessageDataT);
+const at_source_middleware = Effect.gen(function* () {
+    const local_computed_message_data = yield* LocalComputedMessageDataT;
     // Note that direction is from the perspective of the kernel
     if (local_computed_message_data.direction === "incoming") {
         local_computed_message_data.at_source = true;
     }
 })
 
-const at_target_middleware = Effect.gen(function* (_) {
-    const local_computed_message_data = yield* _(LocalComputedMessageDataT);
+const at_target_middleware = Effect.gen(function* () {
+    const local_computed_message_data = yield* LocalComputedMessageDataT;
     if (local_computed_message_data.direction === "outgoing") {
         local_computed_message_data.at_target = true;
     }

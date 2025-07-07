@@ -19,8 +19,8 @@ export function guard_middleware(
 export function guard_incoming(middleware: Middleware): Middleware {
     return guard_middleware(
         middleware,
-        Effect.gen(function* (_) {
-            const { direction } = yield* _(LocalComputedMessageDataT);
+        Effect.gen(function* () {
+            const { direction } = yield* LocalComputedMessageDataT;
             return direction == "incoming";
         })
     );
@@ -29,8 +29,8 @@ export function guard_incoming(middleware: Middleware): Middleware {
 export function guard_outgoing(middleware: Middleware): Middleware {
     return guard_middleware(
         middleware,
-        Effect.gen(function* (_) {
-            const { direction } = yield* _(LocalComputedMessageDataT);
+        Effect.gen(function* () {
+            const { direction } = yield* LocalComputedMessageDataT;
             return direction == "outgoing";
         })
     );
@@ -39,8 +39,8 @@ export function guard_outgoing(middleware: Middleware): Middleware {
 export function guard_at_target(middleware: Middleware): Middleware {
     return guard_middleware(
         middleware,
-        Effect.gen(function* (_) {
-            const { at_target } = yield* _(LocalComputedMessageDataT);
+        Effect.gen(function* () {
+            const { at_target } = yield* LocalComputedMessageDataT;
             return at_target;
         })
     );
@@ -49,8 +49,8 @@ export function guard_at_target(middleware: Middleware): Middleware {
 export function guard_at_source(middleware: Middleware): Middleware {
     return guard_middleware(
         middleware,
-        Effect.gen(function* (_) {
-            const { at_source } = yield* _(LocalComputedMessageDataT);
+        Effect.gen(function* () {
+            const { at_source } = yield* LocalComputedMessageDataT;
             return at_source;
         })
     );
@@ -59,8 +59,8 @@ export function guard_at_source(middleware: Middleware): Middleware {
 export function guard_at_source_or_target(middleware: Middleware): Middleware {
     return guard_middleware(
         middleware,
-        Effect.gen(function* (_) {
-            const { at_source, at_target } = yield* _(LocalComputedMessageDataT);
+        Effect.gen(function* () {
+            const { at_source, at_target } = yield* LocalComputedMessageDataT;
             return at_source || at_target;
         })
     );

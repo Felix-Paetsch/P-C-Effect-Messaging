@@ -20,8 +20,8 @@ const removeListenerEffect = (listener: ListenerEffect) => Effect.gen(function* 
     return yield* Effect.void;
 });
 
-export const listen = Effect.gen(function* (_) {
-    const { listen, remove_cb } = yield* _(ListenerT);
+export const listen = Effect.gen(function* () {
+    const { listen, remove_cb } = yield* ListenerT;
 
     registered_listeners.push(listen);
     const remove_effect = removeListenerEffect(listen);
@@ -41,12 +41,12 @@ export const listen = Effect.gen(function* (_) {
         }));
     }
 
-    return yield* _(Effect.void);
+    return yield* Effect.void;
 });
 
-export const applyListeners = Effect.gen(function* (_) {
+export const applyListeners = Effect.gen(function* () {
     for (const listener of registered_listeners) {
-        yield* _(listener);
+        yield* listener;
     }
     return yield* Effect.void;
 });
@@ -82,8 +82,8 @@ const removeErrorListenerEffect = (listener: ErrorListenEffect) => Effect.gen(fu
     return yield* Effect.void;
 });
 
-export const listenMessageProcessingError = Effect.gen(function* (_) {
-    const { listen, remove_cb } = yield* _(ErrorListenerT);
+export const listenMessageProcessingError = Effect.gen(function* () {
+    const { listen, remove_cb } = yield* ErrorListenerT;
 
     registered_error_listeners.push(listen);
     const remove_effect = removeErrorListenerEffect(listen);
@@ -103,16 +103,16 @@ export const listenMessageProcessingError = Effect.gen(function* (_) {
         }));
     }
 
-    return yield* _(Effect.void);
+    return yield* Effect.void;
 });
 
-export const applyMessageProcessingErrorListeners = (e: Error) => Effect.gen(function* (_) {
+export const applyMessageProcessingErrorListeners = (e: Error) => Effect.gen(function* () {
     for (const listener of registered_error_listeners) {
-        yield* _(listener);
+        yield* listener;
     }
     return yield* Effect.void;
 }).pipe(
-    Effect.provideServiceEffect(MessageProcessingErrorT, Effect.gen(function* (_) {
+    Effect.provideServiceEffect(MessageProcessingErrorT, Effect.gen(function* () {
         const msgO = yield* Effect.serviceOption(MessageT)
         const msg = Option.isNone(msgO) ? null : msgO.value;
 

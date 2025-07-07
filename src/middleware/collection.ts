@@ -6,9 +6,9 @@ export function harpoon_middleware(...arr: Middleware[]): Array<Middleware> & ((
 export function harpoon_middleware(...args: any[]): Array<Middleware> & (() => Middleware) {
     const arr: Middleware[] = Array.isArray(args[0]) ? args[0] : args;
 
-    const mwf = (): Middleware => Effect.gen(function* (_) {
+    const mwf = (): Middleware => Effect.gen(function* () {
         for (let a of arr) {
-            const mp = yield* _(a);
+            const mp = yield* a;
             if (mp === MiddlewareInterrupt) {
                 return mp;
             }
@@ -43,9 +43,9 @@ export function non_interrupt_harpoon_middleware(...arr: Middleware[]): Array<Mi
 export function non_interrupt_harpoon_middleware(...args: any[]): Array<Middleware> & (() => Middleware) {
     const arr: Middleware[] = Array.isArray(args[0]) ? args[0] : args;
 
-    const mwf = (): Middleware => Effect.gen(function* (_) {
+    const mwf = (): Middleware => Effect.gen(function* () {
         for (let a of arr) {
-            const mp = yield* _(a);
+            const mp = yield* a;
             if (mp === MiddlewareInterrupt) {
                 return MiddlewareContinue;
             }
@@ -80,9 +80,9 @@ export function collection_middleware(...arr: Middleware[]): Middleware;
 export function collection_middleware(...args: any[]): Middleware {
     const arr: Middleware[] = Array.isArray(args[0]) ? args[0] : args;
 
-    return Effect.gen(function* (_) {
+    return Effect.gen(function* () {
         for (let a of arr) {
-            const mp = yield* _(a);
+            const mp = yield* a;
             if (mp === MiddlewareInterrupt) {
                 return mp;
             }
@@ -105,9 +105,9 @@ export function reverse_collection_middleware(...arr: Middleware[]): Middleware;
 export function reverse_collection_middleware(...args: any[]): Middleware {
     const arr: Middleware[] = Array.isArray(args[0]) ? args[0] : args;
 
-    return Effect.gen(function* (_) {
+    return Effect.gen(function* () {
         for (let a of arr.reverse()) {
-            const mp = yield* _(a);
+            const mp = yield* a;
             if (mp === MiddlewareInterrupt) {
                 return mp;
             }

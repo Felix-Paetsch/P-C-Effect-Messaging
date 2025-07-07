@@ -22,15 +22,15 @@ export class MiddlewareConfT extends Context.Tag("MiddlewareConfT")<
     MiddlewareConf
 >() { }
 
-export const useMiddleware = Effect.gen(function* (_) {
+export const useMiddleware = Effect.gen(function* () {
     const {
         middleware,
         address
-    } = yield* _(MiddlewareConfT);
+    } = yield* MiddlewareConfT;
 
-    const endpoint = yield* _(findEndpoint(address));
+    const endpoint = yield* findEndpoint(address);
 
     endpoint.middlewares.push(middleware);
 
-    return yield* _(Effect.void);
+    return yield* Effect.void;
 });

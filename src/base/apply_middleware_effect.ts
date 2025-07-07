@@ -4,16 +4,16 @@ import { findEndpointOrFail } from "./endpoints";
 import { MiddlewareInterrupt, MiddlewarePassthrough } from "./middleware";
 
 export const applyMiddlewareEffect =
-    Effect.gen(function* (_) {
-        const address = yield* _(AddressT);
-        const endpoint = yield* _(findEndpointOrFail(address));
+    Effect.gen(function* () {
+        const address = yield* AddressT;
+        const endpoint = yield* findEndpointOrFail(address);
 
         for (const middleware of endpoint.middlewares) {
-            const interrupt = yield* _(middleware);
+            const interrupt = yield* middleware;
             if (interrupt == MiddlewareInterrupt) {
                 return interrupt as MiddlewarePassthrough;
             }
         }
 
-        return yield* _(Effect.void);
+        return yield* Effect.void;
     }); 

@@ -60,8 +60,8 @@ export class ProtocolErrorN extends Data.TaggedError("ProtocolError")<{
         })
     });
 
-    static throwIfRespondedWithError = Effect.gen(function* (_) {
-        const protocol_message = yield* _(ProtocolMessageT);
+    static throwIfRespondedWithError = Effect.gen(function* () {
+        const protocol_message = yield* ProtocolMessageT;
         if (!(protocol_message.meta_data.protocol as any).is_error) {
             return yield* Effect.void;
         }
@@ -133,8 +133,8 @@ export abstract class Protocol<SenderResult, ReceiverResult> {
         readonly protocol_version: string
     ) { }
 
-    static not_implemented_error = Effect.gen(function* (_) {
-        const message = yield* _(ProtocolMessageT);
+    static not_implemented_error = Effect.gen(function* () {
+        const message = yield* ProtocolMessageT;
         return yield* new ProtocolErrorR(
             {
                 message: "Not implemented",
@@ -159,7 +159,7 @@ export abstract class Protocol<SenderResult, ReceiverResult> {
 
         const self = this;
 
-        return Effect.gen(function* (_) {
+        return Effect.gen(function* () {
             const message = new Message(address, {
                 data
             });
@@ -175,7 +175,7 @@ export abstract class Protocol<SenderResult, ReceiverResult> {
                 )
             )
 
-            const env = yield* _(EnvironmentT);
+            const env = yield* EnvironmentT;
             return responseE.pipe(
                 Effect.andThen((response) => self.to_protocol_message(response)),
                 Effect.mapError(e => {
@@ -198,8 +198,8 @@ export abstract class Protocol<SenderResult, ReceiverResult> {
         const msg = res.message;
         const self = this;
 
-        return Effect.gen(function* (_) {
-            const env = yield* _(EnvironmentT);
+        return Effect.gen(function* () {
+            const env = yield* EnvironmentT;
             const respond: ProtocolMessageRespond = (data = "Ok", timeout?: number, is_error: boolean = false) => {
                 if (unsanatizedProtocolMessage.has_responded) {
                     return Effect.succeed(Effect.fail(new ProtocolErrorN({
@@ -323,12 +323,12 @@ export abstract class Protocol<SenderResult, ReceiverResult> {
     static fail_with_response = <A, R>(e: Effect.Effect<A, unknown, R>) => pipe(
         e,
         Protocol.fail_as_protocol_error,
-        Effect.catchTag("ProtocolError", e => Effect.gen(function* (_) {
+        Effect.catchTag("ProtocolError", e => Effect.gen(function* () {
             if (e instanceof ProtocolErrorR) {
                 return yield* Effect.fail(e);
             }
 
-            const message = yield* _(ProtocolMessageT);
+            const message = yield* ProtocolMessageT;
             return yield* Effect.fail(
                 e.to_protocolErrorR(message)
             );
@@ -351,7 +351,7 @@ export abstract class Protocol<SenderResult, ReceiverResult> {
     /** The middleware to register on both sides to make this work */
     middleware(env: Environment): Effect.Effect<Middleware, never, never> {
         const self = this;
-        return Effect.gen(function* (_) {
+        return Effect.gen(function* () {
             const on_first_request = self.on_first_request.pipe(
                 Effect.provideServiceEffect(ProtocolMessageT,
                     ChainMessageResultT.pipe(
@@ -365,8 +365,8 @@ export abstract class Protocol<SenderResult, ReceiverResult> {
             return chain_middleware(
                 on_first_request,
                 Effect.void,
-                Effect.gen(function* (_) {
-                    const message = yield* _(MessageT);
+                Effect.gen(function* () {
+                    const message = yield* MessageT;
                     const meta_data = message.meta_data;
                     const protocol_meta_data = yield* Protocol.get_protocol_meta_data(meta_data);
                     if (Option.isNone(protocol_meta_data)) {
