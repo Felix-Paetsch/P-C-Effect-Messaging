@@ -41,7 +41,7 @@ export const createLocalEnvironment = (
     let active: boolean = true;
     const guard_is_active = Effect.gen(function* (_) {
         if (!active) {
-            return yield* _(Effect.fail(new EnvironmentInactiveError({ address: ownAddress })));
+            return yield* new EnvironmentInactiveError({ address: ownAddress });
         }
         return yield* _(Effect.void);
     });

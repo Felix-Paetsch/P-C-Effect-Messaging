@@ -135,13 +135,13 @@ export abstract class Protocol<SenderResult, ReceiverResult> {
 
     static not_implemented_error = Effect.gen(function* (_) {
         const message = yield* _(ProtocolMessageT);
-        return yield* Effect.fail(new ProtocolErrorR(
+        return yield* new ProtocolErrorR(
             {
                 message: "Not implemented",
                 data: {},
                 Message: message
             }
-        ))
+        )
     })
 
     // Will be called if the first message reaches its target on the other side
@@ -258,18 +258,18 @@ export abstract class Protocol<SenderResult, ReceiverResult> {
             );
 
             if (!content.hasOwnProperty('data')) {
-                return yield* Effect.fail(new ProtocolErrorR({
+                return yield* new ProtocolErrorR({
                     message: "Message content missing 'data' attribute",
                     Message: unsanatizedProtocolMessage
-                }));
+                });
             }
 
             const protocol_meta_data = yield* Protocol.get_protocol_meta_data(msg.meta_data);
             if (Option.isNone(protocol_meta_data)) {
-                return yield* Effect.fail(new ProtocolErrorR({
+                return yield* new ProtocolErrorR({
                     message: "Invalid protocol meta data",
                     Message: unsanatizedProtocolMessage
-                }));
+                });
             }
 
             unsanatizedProtocolMessage.data = content.data;

@@ -62,7 +62,7 @@ export class Message {
         return Effect.gen(function* (_) {
             if (this_msg.msg_content.serialized === null) {
                 if (this_msg.msg_content.deserialized === null) {
-                    return yield* _(Effect.fail(new MessageSerializationError({ message: this_msg })));
+                    return yield* new MessageSerializationError({ message: this_msg });
                 }
 
                 const serialized = yield* _(Schema.encode(transform_message_content)(this_msg.msg_content.deserialized));
