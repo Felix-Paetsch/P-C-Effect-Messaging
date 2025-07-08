@@ -1,4 +1,4 @@
-import { Context, Data, Effect, Option } from "effect";
+import { Context, Data, Effect, Fiber, Option } from "effect";
 import { MessageT, TransmittableMessageT } from "./message";
 import { MessageTransmissionError } from "./errors/message_errors";
 import { Address, AddressT } from "./address";
@@ -63,7 +63,8 @@ export const createLocalEnvironment = (
                     })
                 ))
             );
-            _onMessageForKernelRecieved = new_recieve_effect;
+
+            _onMessageForKernelRecieved = new_recieve_effect
         },
         remove_cb: (_remove_effect: Effect.Effect<void, never, never>) => {
             remove_effect = _remove_effect;

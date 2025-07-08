@@ -1,4 +1,4 @@
-import { Effect, Schema, Data, Context, Deferred, Duration, Schedule, pipe, Console, Ref } from "effect";
+import { Effect, Schema, Data, Context, Deferred, Duration, Schedule, pipe } from "effect";
 import { Json, Message, MessageT } from "../base/message";
 import { Address } from "../base/address";
 import { Middleware, MiddlewareContinue, MiddlewareInterrupt } from "../base/middleware";
@@ -24,15 +24,7 @@ export class ChainTimeout extends Data.TaggedError("ChainTimeout")<{
 
 export type ChainMessageResult = {
     message: Message,
-    respond: (
-        content: { [key: string]: Json },
-        meta_data?: { [key: string]: Json }
-    ) => Effect.Effect<
-        void,
-        MessageTransmissionError | EnvironmentInactiveError,
-        EnvironmentT
-    >,
-    requestRespond: ResponseFunction,
+    respond: ResponseFunction
 }
 
 export class ChainMessageResultT extends Context.Tag("ChainMessageResultT")<
@@ -41,14 +33,13 @@ export class ChainMessageResultT extends Context.Tag("ChainMessageResultT")<
 >() { }
 
 export type ChainContinueEffect = Effect.Effect<
-    ChainMessageResult,
-    ChainTimeout | MessageTransmissionError | EnvironmentInactiveError,
+    Effect.Effect<ChainMessageResult, ChainTimeout, EnvironmentT>,
+    MessageTransmissionError | EnvironmentInactiveError,
     EnvironmentT
 >;
-
 export type ResponseFunction = (
     content: { [key: string]: Json },
-    meta_data?: { [key: string]: Json },
+    meta_data: { [key: string]: Json },
     new_timeout?: number
 ) => ChainContinueEffect;
 export class ResponseFunctionT extends Context.Tag("ResponseFunctionT")<
@@ -91,14 +82,13 @@ const make_chain_message_promise = (message: Message, chain_uid: string, timeout
     const deferred = yield* Deferred.make<ChainMessageResult, never>();
     const timeout_duration = Duration.millis(timeout);
     const deferred_with_timeout = deferred.pipe(
-        Effect.timeout(timeout_duration),
+        //Effect.timeout(timeout_duration),
         Effect.mapError(() => new ChainTimeout({
             timeout: timeout,
             msg_chain_uid: chain_uid
         }))
     );
 
-    const date = Date.now();
     chain_queue[key] = {
         last_message: message,
         on_chain_message_result: (cmr: ChainMessageResult) => {
@@ -106,10 +96,7 @@ const make_chain_message_promise = (message: Message, chain_uid: string, timeout
                 Deferred.succeed(deferred, cmr),
                 Effect.ensuring(Effect.suspend(
                     () => Effect.succeed(delete chain_queue[key])
-                )),
-                Effect.tap(() => Effect.gen(function* () {
-                    console.log("DEFERRED SUCCEEDED", date);
-                }))
+                ))
             );
         }
     }
@@ -120,15 +107,12 @@ const make_chain_message_promise = (message: Message, chain_uid: string, timeout
         Effect.suspend(() => Effect.succeed(delete chain_queue[key]))
     )
 
-    return Effect.gen(function* () {
-        console.log("NOW LISTENING TO", date);
-        return yield* deferred_with_timeout;
-    });
+    return deferred_with_timeout;
 });
 
 export const chain_middleware = (
-    on_first_request: Effect.Effect<void, never, MessageT | ChainMessageResultT | LocalComputedMessageDataT> = Effect.void,
-    process_message: Effect.Effect<void, never, MessageT | ChainMessageResultT | LocalComputedMessageDataT> = Effect.void,
+    on_first_request: Effect.Effect<void, never, MessageT | ResponseFunctionT | ChainMessageResultT | LocalComputedMessageDataT>,
+    process_message: Effect.Effect<void, never, MessageT | ResponseFunctionT | ChainMessageResultT | LocalComputedMessageDataT>,
     should_process_message: Effect.Effect<boolean, never, MessageT | LocalComputedMessageDataT> = Effect.succeed(true)
 ) => guard_at_target(
     Effect.gen(function* () {
@@ -151,35 +135,30 @@ export const chain_middleware = (
         );
 
         const continue_chain = continue_chain_fn(data);
-        const chain_message_result: ChainMessageResult = {
-            message: message,
-            respond: (content: { [key: string]: Json }, meta_data: { [key: string]: Json } = {}) => Effect.gen(function* () {
-                const { respond } = yield* continue_chain(content, meta_data, 0);
-                return yield* respond;
-            }),
-            requestRespond: (content: { [key: string]: Json }, meta_data: { [key: string]: Json } = {}, new_timeout?: number) => Effect.gen(function* () {
-                const res = yield* continue_chain(content, meta_data, new_timeout);
-                yield* Effect.fork(res.respond);
-                return yield* res.await;
-            })
-        };
+        const chain_message_context = Context.empty().pipe(
+            Context.add(ChainMessageResultT, { message: message, respond: continue_chain }),
+            Context.add(ResponseFunctionT, continue_chain)
+        );
 
-        yield* process_message.pipe(Effect.provideService(ChainMessageResultT, chain_message_result));
+        yield* process_message.pipe(Effect.provide(chain_message_context));
 
         const promise_key = get_message_promise_key(data.msg_chain_uid, data.current_msg_chain_length, "recieve");
 
         if (data.current_msg_chain_length === 1) {
-            yield* on_first_request.pipe(Effect.provideService(ChainMessageResultT, chain_message_result));
+            yield* on_first_request.pipe(Effect.provide(chain_message_context));
         } else if (chain_queue[promise_key]) {
-            yield* chain_queue[promise_key].on_chain_message_result(chain_message_result);
+            yield* chain_queue[promise_key].on_chain_message_result({
+                message: message,
+                respond: continue_chain
+            });
         }
 
         return MiddlewareInterrupt;
     }).pipe(Effect.ignore)
 );
 
-const continue_chain_fn = (request_chain_message_meta_data: typeof chain_message_schema.Type) => {
-    return (content: { [key: string]: Json }, meta_data: { [key: string]: any } = {}, new_timeout?: number) => Effect.gen(function* () {
+const continue_chain_fn = (request_chain_message_meta_data: typeof chain_message_schema.Type): ResponseFunction => {
+    return (content: { [key: string]: Json }, meta_data: { [key: string]: any } = {}, new_timeout?: number): ChainContinueEffect => Effect.gen(function* () {
         const {
             current_sender,
             current_reciever,
@@ -201,19 +180,16 @@ const continue_chain_fn = (request_chain_message_meta_data: typeof chain_message
             }).pipe(Effect.orDie)
         });
 
-        const prom = yield* make_chain_message_promise(res, msg_chain_uid, new_timeout ?? timeout);
         const send = (yield* EnvironmentT).send;
+        yield* send.pipe(Effect.provideService(MessageT, res));
 
-        return {
-            await: prom,
-            respond: send.pipe(Effect.provideService(MessageT, res))
-        };
+        return yield* make_chain_message_promise(res, msg_chain_uid, new_timeout ?? timeout);
     });
 }
 
 export const id_chain_middleware = (
-    on_first_request: Effect.Effect<void, never, MessageT | ChainMessageResultT | LocalComputedMessageDataT>,
-    process_message: Effect.Effect<void, never, MessageT | ChainMessageResultT | LocalComputedMessageDataT>,
+    on_first_request: Effect.Effect<void, never, MessageT | ResponseFunctionT | ChainMessageResultT | LocalComputedMessageDataT>,
+    process_message: Effect.Effect<void, never, MessageT | ResponseFunctionT | ChainMessageResultT | LocalComputedMessageDataT>,
     id: string
 ): Middleware & {
     make_message_chain: (message: Message) => Effect.Effect<Message, ChainTimeout, EnvironmentT>
@@ -240,4 +216,4 @@ export const id_chain_middleware = (
     return mw as Middleware & {
         make_message_chain: (message: Message) => Effect.Effect<Message, ChainTimeout, EnvironmentT>
     };
-} 
+}

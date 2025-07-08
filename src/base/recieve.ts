@@ -1,4 +1,4 @@
-import { Context, Effect, pipe } from "effect";
+import { Context, Effect, Fiber, pipe } from "effect";
 import { Message, MessageT, TransmittableMessageT } from "./message";
 import { Address, AddressT } from "./address";
 import { applyMiddlewareEffect } from "./apply_middleware_effect";
@@ -40,5 +40,10 @@ export const recieve:
                 error: err,
                 data: "The message to recieve had bad format."
             }))
-        )
+        ),
+        (e) => Effect.gen(function* () {
+            yield* Effect.fork(e)
+            yield* Effect.sleep("100 millis");
+            return yield* Effect.void;
+        })
     )
