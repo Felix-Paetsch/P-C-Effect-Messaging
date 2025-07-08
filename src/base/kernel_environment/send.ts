@@ -15,7 +15,7 @@ export class AddressNotFoundError extends Data.TaggedError("AddressNotFoundError
 
 export const kernel_send: Effect.Effect<void, MessageTransmissionError | InvalidMessageFormatError, MessageT> = Effect.gen(function* () {
     const message = yield* MessageT;
-    console.log(message);
+    console.log("< MSG >");
     const address = message.target;
 
     const endpoint = yield* findEndpointOrFail(address);

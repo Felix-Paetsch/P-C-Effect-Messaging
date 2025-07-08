@@ -84,8 +84,8 @@ export class ProtocolErrorR extends ProtocolErrorN {
         Message: ProtocolMessage
     }) {
         super(args);
-        if (this.Message && !this.Message.has_responded) {
-            this.Message.respond_error(this).pipe(
+        if (this.Message && !this.Message.hasResponded) {
+            this.Message.respondError(this).pipe(
                 Effect.runPromise
             );
         }
@@ -101,18 +101,26 @@ export function is_protocol_error(e: any): e is ProtocolError {
     return e instanceof ProtocolErrorN
 }
 
-type ProtocolMessageRespond = (data: Json, timeout?: number, is_error?: boolean) =>
-    Effect.Effect<
-        Effect.Effect<ProtocolMessage, ProtocolError>,
-        MessageTransmissionError | EnvironmentInactiveError,
-        never
-    >
-
 export type ProtocolMessage = Message & {
-    readonly respond: ProtocolMessageRespond,
-    readonly respond_error: (error: ProtocolErrorR) => Effect.Effect<void, never, never>,
+    readonly respond: (
+        content: Json
+    ) => Effect.Effect<
+        void,
+        ProtocolError,
+        never
+    >,
+    readonly requestRespond: (
+        content: Json,
+        new_timeout?: number
+    ) => Effect.Effect<
+        ProtocolMessage,
+        ProtocolError,
+        never
+    >,
+    readonly respondError: (error: ProtocolErrorR) => Effect.Effect<void, never, never>,
+    readonly environment: Environment,
     data: Json,
-    has_responded: boolean
+    hasResponded: boolean
 }
 
 export class ProtocolMessageT extends Context.Tag("ProtocolMessageT")<ProtocolMessageT, ProtocolMessage>() { }
@@ -149,35 +157,30 @@ export abstract class Protocol<SenderResult, ReceiverResult> {
         return Protocol.not_implemented_error
     }
 
-    // Send the first message
+    // Send the first message | always expects a response
     protected send_first_message(address: Address, data: Json, timeout?: number):
         Effect.Effect<
-            Effect.Effect<ProtocolMessage, ProtocolError>,
-            MessageTransmissionError | EnvironmentInactiveError,
+            ProtocolMessage,
+            ProtocolError,
             EnvironmentT
         > {
-
-        const self = this;
-
-        return Effect.gen(function* () {
+        return Effect.gen(this, function* () {
             const message = new Message(address, {
                 data
             });
 
-            self.set_protocol_meta_data(message)
+            this.set_protocol_meta_data(message)
             const responseE = yield* make_message_chain(message, timeout)
-            const send = (yield* EnvironmentT).send;
-
-            yield* send.pipe(
+            const send = (yield* EnvironmentT).send.pipe(
                 Effect.provideService(
                     MessageT,
                     message
                 )
             )
 
-            const env = yield* EnvironmentT;
-            return responseE.pipe(
-                Effect.andThen((response) => self.to_protocol_message(response)),
+            yield* Effect.fork(send);
+            return yield* responseE.pipe(
+                Effect.andThen(res => this.to_protocol_message(res)),
                 Effect.mapError(e => {
                     if (is_protocol_error(e)) {
                         return e;
@@ -188,66 +191,88 @@ export abstract class Protocol<SenderResult, ReceiverResult> {
                         error: e
                     })
                 })
-            ).pipe(
-                Effect.provideService(EnvironmentT, env)
             )
         })
     }
 
     protected to_protocol_message(res: ChainMessageResult): Effect.Effect<ProtocolMessage, ProtocolError, EnvironmentT> {
         const msg = res.message;
-        const self = this;
-
-        return Effect.gen(function* () {
+        return Effect.gen(this, function* () {
             const env = yield* EnvironmentT;
-            const respond: ProtocolMessageRespond = (data = "Ok", timeout?: number, is_error: boolean = false) => {
-                if (unsanatizedProtocolMessage.has_responded) {
-                    return Effect.succeed(Effect.fail(new ProtocolErrorN({
+            const requestRespond = (data: Json = "Ok", timeout?: number) => {
+                if (unsanatizedProtocolMessage.hasResponded) {
+                    return Effect.fail(new ProtocolErrorN({
                         message: "Message already responded",
                         Message: unsanatizedProtocolMessage
-                    })));
+                    }));
                 }
 
-                unsanatizedProtocolMessage.has_responded = true;
-                return res.respond({ data }, {
-                    protocol: {
-                        ...self.protocol_meta_data, is_error
-                    }
+                unsanatizedProtocolMessage.hasResponded = true;
+                return res.requestRespond({ data }, {
+                    protocol: this.protocol_meta_data
                 }, timeout).pipe(
-                    Effect.andThen(responseEffect =>
-                        Effect.succeed(responseEffect.pipe(
-                            Effect.andThen(message => self.to_protocol_message(message)),
-                            Effect.mapError(e => {
-                                if (is_protocol_error(e)) return e;
-                                if (e instanceof ChainTimeout) {
-                                    return new ProtocolErrorN({
-                                        message: "Protocol timeout",
-                                        error: e
-                                    })
-                                }
-                                return new ProtocolErrorN({
-                                    message: "Protocol error",
-                                    error: e as Error
-                                })
-                            }),
-                            Effect.provideService(EnvironmentT, env)
-                        ))
-                    ),
+                    Effect.andThen(message => this.to_protocol_message(message)),
+                    Effect.mapError(e => {
+                        if (is_protocol_error(e)) return e;
+                        if (e instanceof ChainTimeout) {
+                            return new ProtocolErrorN({
+                                message: "Protocol timeout",
+                                error: e
+                            })
+                        }
+                        return new ProtocolErrorN({
+                            message: "Protocol error",
+                            error: e as Error
+                        })
+                    }),
                     Effect.provideService(EnvironmentT, env)
                 )
             }
 
-            const respond_error: ProtocolMessage["respond_error"] = (err) =>
+            const respond = (data: Json = "Ok", is_error: boolean = false) => {
+                if (unsanatizedProtocolMessage.hasResponded) {
+                    return Effect.fail(new ProtocolErrorN({
+                        message: "Message already responded",
+                        Message: unsanatizedProtocolMessage
+                    }));
+                }
+
+                unsanatizedProtocolMessage.hasResponded = true;
+                return res.respond({ data }, {
+                    protocol: {
+                        ...this.protocol_meta_data, is_error
+                    }
+                }).pipe(
+                    Effect.mapError(e => {
+                        if (is_protocol_error(e)) return e;
+                        if (e instanceof ChainTimeout) {
+                            return new ProtocolErrorN({
+                                message: "Protocol timeout",
+                                error: e
+                            })
+                        }
+                        return new ProtocolErrorN({
+                            message: "Protocol error",
+                            error: e as Error
+                        })
+                    }),
+                    Effect.provideService(EnvironmentT, env)
+                )
+            }
+
+            const respond_error: ProtocolMessage["respondError"] = (err) =>
                 pipe(
-                    respond(err.serialize(), undefined, true),
+                    respond(err.serialize(), true),
                     Effect.ignore
                 );
 
             const unsanatizedProtocolMessage: ProtocolMessage = Object.assign(msg, {
                 respond,
-                respond_error,
+                requestRespond: requestRespond,
+                respondError: respond_error,
                 data: {},
-                has_responded: false
+                hasResponded: false,
+                environment: env
             });
 
             const content = yield* msg.content.pipe(
