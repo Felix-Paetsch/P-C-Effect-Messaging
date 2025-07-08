@@ -4,13 +4,14 @@ import { Address, AddressT } from "./address";
 import { applyMiddlewareEffect } from "./apply_middleware_effect";
 import { MiddlewareInterrupt } from "./middleware";
 import { LocalComputedMessageDataT, justRecievedLocalComputedMessageData } from "./local_computed_message_data";
-import { InvalidMessageFormatError, MessageTransmissionError } from "./errors/message_errors";
+import { InvalidMessageFormatError } from "./errors/message_errors";
 import { kernel_send } from "./kernel_environment/send";
+import { Promisify } from "../utils/promisify";
 
 export class RecieveAddressT extends Context.Tag("RecieveAddressT")<RecieveAddressT, Address>() { }
 
 export const recieve:
-    Effect.Effect<void, MessageTransmissionError | InvalidMessageFormatError, RecieveAddressT | TransmittableMessageT> =
+    Effect.Effect<void, void, RecieveAddressT | TransmittableMessageT> =
     pipe(
         applyMiddlewareEffect,
         Effect.provideServiceEffect(
@@ -41,9 +42,8 @@ export const recieve:
                 data: "The message to recieve had bad format."
             }))
         ),
-        (e) => Effect.gen(function* () {
-            yield* Effect.fork(e)
-            yield* Effect.sleep("100 millis");
+        Effect.catchAll(e => Effect.gen(function* () {
             return yield* Effect.void;
-        })
+        })),
+        Promisify
     )

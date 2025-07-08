@@ -1,5 +1,6 @@
 import { Context, Data, Effect, ParseResult, pipe, Schema } from "effect";
 import { Address } from "./address";
+import { Json } from "../utils/json";
 
 export class MessageT extends Context.Tag("MessageT")<
     MessageT,
@@ -13,9 +14,6 @@ export class MessageDeserializationError extends Data.TaggedError("MessageDeseri
 
 export type SerializedMessage = string & { readonly __brand: "SerializedMessage" };
 export class SerializedMessageT extends Context.Tag("SerializedMessageT")<SerializedMessageT, SerializedMessage>() { }
-
-export type Json = string | number | boolean | null | Json[] | { [key: string]: Json };
-
 export type MessageContent = {
     serialized: string | null,
     deserialized: { [key: string]: Json } | null

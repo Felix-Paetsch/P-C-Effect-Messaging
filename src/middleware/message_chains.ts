@@ -98,16 +98,10 @@ const make_chain_message_promise = (message: Message, chain_uid: string, timeout
                 Deferred.succeed(deferred, cmr),
                 Effect.ensuring(Effect.suspend(
                     () => Effect.succeed(delete chain_queue[key])
-                )),
-                Effect.tap(() => Effect.gen(function* () {
-                    console.log("Chain message result: ", date);
-                    return yield* Effect.void;
-                }))
+                ))
             );
         }
     }
-
-    console.log("MAKE", key);
 
     yield* Schedule.run(
         Schedule.addDelay(Schedule.once, () => timeout_duration),
@@ -115,10 +109,7 @@ const make_chain_message_promise = (message: Message, chain_uid: string, timeout
         Effect.suspend(() => Effect.succeed(delete chain_queue[key]))
     )
 
-    return Effect.gen(function* () {
-        console.log("Started listening to ", date);
-        return yield* deferred_with_timeout;
-    });
+    return deferred_with_timeout;
 });
 
 export const chain_middleware = (
@@ -155,13 +146,9 @@ export const chain_middleware = (
 
         const promise_key = get_message_promise_key(data.msg_chain_uid, data.current_msg_chain_length, "recieve");
 
-        console.log("Getting", data.current_msg_chain_length);
-        console.log(promise_key, Object.keys(chain_queue));
         if (data.current_msg_chain_length === 1) {
             yield* on_first_request.pipe(Effect.provide(chain_message_context));
         } else if (chain_queue[promise_key]) {
-            console.log("Resolving", data.current_msg_chain_length);
-
             yield* chain_queue[promise_key].on_chain_message_result({
                 message: message,
                 respond: continue_chain
