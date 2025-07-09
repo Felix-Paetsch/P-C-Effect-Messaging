@@ -1,5 +1,5 @@
 import { Effect, Schema, Data, Context, Deferred, Duration, Schedule, pipe } from "effect";
-import { Json, Message, MessageT } from "../base/message";
+import { Message, MessageT } from "../base/message";
 import { Address } from "../base/address";
 import { Middleware, MiddlewareContinue, MiddlewareInterrupt } from "../base/middleware";
 import { v4 as uuidv4 } from 'uuid';
@@ -7,6 +7,7 @@ import { LocalComputedMessageDataT } from "../base/local_computed_message_data";
 import { EnvironmentInactiveError, EnvironmentT } from "../base/environment";
 import { guard_at_target } from "./guard";
 import { InvalidMessageFormatError, MessageTransmissionError } from "../base/errors/message_errors";
+import { Json } from "../utils/json";
 
 const chain_message_schema = Schema.Struct({
     current_sender: Address.AddressFromString,
