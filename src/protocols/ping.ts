@@ -1,7 +1,10 @@
 import { Effect } from "effect";
 import { Address } from "../base/address";
-import { is_protocol_error, Protocol, ProtocolError, ProtocolErrorN, ProtocolMessageT } from "./protocol";
+import { Protocol } from "./protocol";
+import { is_protocol_error, ProtocolError, ProtocolErrorN } from "./base/protocol_errors";
+import { ProtocolMessageT } from "./base/protocol_message";
 import { Either } from "effect";
+import { ProtocolCommunicationHandlerT } from "./base/communicationHandler";
 
 export class PingProtocol extends Protocol<Either.Either<true, ProtocolError>, void> {
     constructor() {
@@ -11,11 +14,8 @@ export class PingProtocol extends Protocol<Either.Either<true, ProtocolError>, v
     run(address: Address) {
         const self = this;
         return Effect.gen(function* (_) {
-            const res = yield* self.send_first_message(address, "Ping")
-
-            return yield* res.pipe(
-                Effect.as(true as const)
-            )
+            yield* yield* self.send_first_message(address, "Ping")
+            return true as const;
         }).pipe(
             Effect.mapError(e => {
                 if (is_protocol_error(e)) {
@@ -32,10 +32,8 @@ export class PingProtocol extends Protocol<Either.Either<true, ProtocolError>, v
 
     get on_first_request() {
         return Effect.gen(function* () {
-            const msg = yield* ProtocolMessageT;
-            yield* msg.respond("Pong").pipe(
-                Effect.ignore
-            );
+            const ch = yield* ProtocolCommunicationHandlerT;
+            yield* ch.close("Pong", true)
         })
     }
 }

@@ -16,6 +16,7 @@ export type SuccessResult<Res> = {
 }
 
 export type Result<Res, Err extends Error> = SuccessResult<Res> | ErrorResult<Err>
+export type ResultPromise<Res, Err extends Error> = Promise<Result<Res, Err>>
 
 export function EffectAsPromise<T, E extends Error>(e: Effect.Effect<T, E>): () => Promise<Result<T, E>> {
     return () => runEffectAsPromise(e)
@@ -61,16 +62,16 @@ function syncCallbackAsEffect<T extends (...args: any[]) => any>(cb: T): (...arg
 
 export function callbackAsEffect<T extends (...args: any[]) => any>(
     cb: T
-): (...args: Parameters<T>) => Effect.Effect<ReturnType<T>, CallbackError> {
+): (...args: Parameters<T>) => Effect.Effect<Awaited<ReturnType<T>>, CallbackError> {
     return (...args: Parameters<T>) =>
         Effect.gen(function* () {
             const res = yield* syncCallbackAsEffect(cb)(...args);
             if ((res as any) instanceof Promise) {
                 return yield* Effect.tryPromise({
-                    try: () => res as Promise<ReturnType<T>>,
+                    try: () => res,
                     catch: (e) => new CallbackError({ error: e })
                 });
             }
             return res;
-        });
+        }) as Effect.Effect<Awaited<ReturnType<T>>, CallbackError>;
 }
