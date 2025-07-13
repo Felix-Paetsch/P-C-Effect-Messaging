@@ -17,7 +17,7 @@ type ProtocolMessageRespond = (data: Json, timeout?: number, is_error?: boolean)
 export type ProtocolMessage = Message & {
     readonly respond: ProtocolMessageRespond,
     readonly respond_error: (error: ProtocolErrorR) => Effect.Effect<void, never, never>,
-    data: Json,
+    readonly data: Json,
     has_responded: boolean,
     environment: Environment
 }
@@ -123,7 +123,7 @@ export function to_protocol_message(
             });
         }
 
-        unsanatizedProtocolMessage.data = content.data;
+        (unsanatizedProtocolMessage as any).data = content.data;
         yield* ProtocolErrorN.throwIfRespondedWithError(unsanatizedProtocolMessage);
 
         return unsanatizedProtocolMessage;

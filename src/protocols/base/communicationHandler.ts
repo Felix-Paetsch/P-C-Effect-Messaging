@@ -1,28 +1,32 @@
-import { ProtocolMessage, ProtocolMessageT } from "./protocol_message";
+import { Context, Effect, Layer, pipe } from "effect";
 import { Json } from "../../utils/json";
 import { ProtocolErrorN, ProtocolErrorR } from "./protocol_errors";
-import { Context, Effect, Layer, pipe } from "effect";
+import { ProtocolMessage, ProtocolMessageT } from "./protocol_message";
 
 export class ProtocolCommunicationHandlerT extends Context.Tag("ProtocolCommunicationHandlerT")<ProtocolCommunicationHandlerT, ProtocolCommunicationHandler>() { }
 
 export class ProtocolCommunicationHandler {
     constructor(
-        protected current_pm: ProtocolMessage
+        public __current_pm: ProtocolMessage
     ) { }
+
+    respond(data: Json, timeout?: number) {
+        return this.__current_pm.respond(data, timeout);
+    }
 
     send(data: Json, timeout?: number) {
         return Effect.gen(this, function* () {
-            const pmE = yield* this.current_pm.respond(data, timeout);
+            const pmE = yield* this.respond(data, timeout);
             return pmE.pipe(
                 Effect.andThen(pm => {
-                    this.current_pm = pm;
+                    this.__current_pm = pm;
                     return pm;
                 }),
                 Effect.as(this),
-                Effect.onError(e => this.cleanUp())
+                Effect.onError(_ => this.errorCleanUp())
             );
         }).pipe(
-            Effect.onError(e => this.cleanUp())
+            Effect.onError(_ => this.errorCleanUp())
         )
     }
 
@@ -31,23 +35,23 @@ export class ProtocolCommunicationHandler {
     }
 
     close(data: Json, ignore: false): ReturnType<ProtocolMessage["respond"]>;
-    close(data: Json, ignore: true): ReturnType<ProtocolMessage["respond"]> & Effect.Effect<any, never, any>;
+    close(data: Json, ignore: true): Effect.Effect<ProtocolMessage>;
     close(data: Json = "OK", ignore: boolean = false) {
-        const res = this.current_pm.respond(data, 0)
+        const res = this.respond(data, 0)
         return !ignore ? res : res.pipe(Effect.ignore)
     }
 
     awaitResponse(data: Json, timeout?: number) {
         return Effect.gen(this, function* () {
-            const pm = yield* yield* this.current_pm.respond(data, timeout);
-            this.current_pm = pm;
+            const pm = yield* yield* this.respond(data, timeout);
+            this.__current_pm = pm;
             return this;
         }).pipe(
-            Effect.onError(e => this.cleanUp())
+            Effect.onError(_ => this.errorCleanUp())
         )
     }
 
-    private cleanUp() {
+    private errorCleanUp() {
         return Effect.all(this.error_handlers).pipe(Effect.andThen(() => Effect.void))
     }
     private error_handlers: Effect.Effect<void, never, never>[] = [];
@@ -56,11 +60,11 @@ export class ProtocolCommunicationHandler {
     }
 
     get data(): Json {
-        return this.current_pm.data;
+        return this.__current_pm.data;
     }
 
     get message(): ProtocolMessage {
-        return this.current_pm;
+        return this.__current_pm;
     }
 
     errorN(obj: {
@@ -83,7 +87,7 @@ export class ProtocolCommunicationHandler {
             message: obj.message,
             data: obj.data,
             error: obj.error,
-            Message: this.current_pm
+            Message: this.__current_pm
         })
     }
     asErrorR<E extends Error>(err: E) {
