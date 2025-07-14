@@ -1,15 +1,15 @@
-import { Data, Effect, Schema, Option, Layer } from "effect"
-import { Middleware } from "../base/middleware"
-import { chain_middleware, ChainMessageResult, ChainMessageResultT, make_message_chain } from "../middleware/message_chains"
-import { Address } from "../base/address"
-import { Message, MessageT } from "../base/message";
-import { MessageTransmissionError } from "../base/errors/message_errors";
+import { Data, Effect, Layer, Option, Schema } from "effect";
+import { Address } from "../base/address";
 import { Environment, EnvironmentInactiveError, EnvironmentT } from "../base/environment";
-import { Json } from "../utils/json";
+import { MessageTransmissionError } from "../base/errors/message_errors";
+import { Message, MessageT } from "../base/message";
+import { Middleware } from "../base/middleware";
 import { guard_at_source, guard_at_target } from "../middleware/guard";
-import { ProtocolError, ProtocolErrorN, is_protocol_error, fail_as_protocol_error, fail_with_response, not_implemented_error } from "./base/protocol_errors";
-import { ProtocolMessage, ProtocolMessageT, to_protocol_message, get_protocol_meta_data, ProtocolMessageFromChainMessageResult } from "./base/protocol_message";
+import { chain_middleware, make_message_chain } from "../middleware/message_chains";
+import { Json } from "../utils/json";
 import { ProtocolCommunicationHandler, ProtocolCommunicationHandlerT } from "./base/communicationHandler";
+import { is_protocol_error, ProtocolError, ProtocolErrorN } from "./base/protocol_errors";
+import { get_protocol_meta_data, ProtocolMessageFromChainMessageResult, to_protocol_message } from "./base/protocol_message";
 
 const ProtocolMetaDataSchema = Schema.Struct({
     protocol_name: Schema.String,
@@ -28,7 +28,7 @@ export abstract class Protocol<SenderResult, ReceiverResult> {
     ) { }
 
     abstract get on_first_request(): Effect.Effect<void, ProtocolError, ProtocolCommunicationHandlerT>;
-    protected send_first_message(address: Address, data: Json, timeout?: number):
+    send_first_message(address: Address, data: Json, timeout?: number):
         Effect.Effect<
             Effect.Effect<ProtocolCommunicationHandler, ProtocolError, EnvironmentT>,
             MessageTransmissionError | EnvironmentInactiveError | ProtocolError,

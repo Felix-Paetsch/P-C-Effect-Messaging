@@ -1,5 +1,5 @@
+import { Context, Data, Effect, Equal, Hash, ParseResult, Schema } from "effect";
 import { v4 as uuidv4 } from 'uuid';
-import { Data, Effect, ParseResult, Schema, Equal, Hash, Context } from "effect";
 
 export class AddressDeserializationError extends Data.TaggedError("AddressDeserializationError")<{
     address: string;
@@ -51,6 +51,13 @@ export class Address implements Equal.Equal {
 
     static deserialize(serialized: SerializedAddress): Effect.Effect<Address, AddressDeserializationError> {
         return Schema.decode(Address.AddressFromString)(serialized)
+            .pipe(
+                Effect.catchTag("ParseError", () => new AddressDeserializationError({ address: serialized }))
+            )
+    }
+
+    static deserializeFromUnkown(serialized: any): Effect.Effect<Address, AddressDeserializationError> {
+        return Schema.decodeUnknown(Address.AddressFromString)(serialized)
             .pipe(
                 Effect.catchTag("ParseError", () => new AddressDeserializationError({ address: serialized }))
             )

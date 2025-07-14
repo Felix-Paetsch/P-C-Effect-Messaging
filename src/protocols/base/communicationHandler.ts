@@ -1,6 +1,8 @@
 import { Context, Effect, Layer, pipe } from "effect";
+import { EnvironmentInactiveError } from "../../base/environment";
+import { MessageTransmissionError } from "../../base/errors/message_errors";
 import { Json } from "../../utils/json";
-import { ProtocolErrorN, ProtocolErrorR } from "./protocol_errors";
+import { not_implemented_error, ProtocolError, ProtocolErrorN, ProtocolErrorR } from "./protocol_errors";
 import { ProtocolMessage, ProtocolMessageT } from "./protocol_message";
 
 export class ProtocolCommunicationHandlerT extends Context.Tag("ProtocolCommunicationHandlerT")<ProtocolCommunicationHandlerT, ProtocolCommunicationHandler>() { }
@@ -34,10 +36,10 @@ export class ProtocolCommunicationHandler {
         return this.send(data, 0)
     }
 
-    close(data: Json, ignore: false): ReturnType<ProtocolMessage["respond"]>;
-    close(data: Json, ignore: true): Effect.Effect<ProtocolMessage>;
+    close(data: Json, ignore: false): Effect.Effect<void, ProtocolError | MessageTransmissionError | EnvironmentInactiveError>;
+    close(data: Json, ignore: true): Effect.Effect<void>;
     close(data: Json = "OK", ignore: boolean = false) {
-        const res = this.respond(data, 0)
+        const res = this.respond(data, 0);
         return !ignore ? res : res.pipe(Effect.ignore)
     }
 
@@ -49,6 +51,10 @@ export class ProtocolCommunicationHandler {
         }).pipe(
             Effect.onError(_ => this.errorCleanUp())
         )
+    }
+
+    not_implemented_error() {
+        return not_implemented_error(this.__current_pm);
     }
 
     private errorCleanUp() {
@@ -104,6 +110,8 @@ export class ProtocolCommunicationHandler {
             error: err
         })
     }
+
+
 
     static fromProtocolMessage = Layer.effect(
         ProtocolCommunicationHandlerT,
