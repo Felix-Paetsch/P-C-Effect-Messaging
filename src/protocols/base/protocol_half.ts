@@ -2,6 +2,7 @@ import { Effect } from "effect";
 import { Address } from "../../base/address";
 import { Environment, EnvironmentT } from "../../base/environment";
 import { Middleware } from "../../base/middleware";
+import { guard_at_source, guard_at_target } from "../../middleware/guard";
 import { Json } from "../../utils/json";
 import { Protocol } from "../protocol";
 import { ProtocolCommunicationHandlerT } from "./communicationHandler";
@@ -30,7 +31,9 @@ export function ProtocolRequestHalf<S>(
         }
 
         middleware(env: Environment): Effect.Effect<Middleware, never, never> {
-            return super.request_middleware(env);
+            return super.middleware(env).pipe(
+                Effect.map(middleware => guard_at_source(middleware))
+            );
         }
     }
 
@@ -55,7 +58,9 @@ export function ProtocolResponseHalf<S>(ident: {
         }
 
         middleware(env: Environment): Effect.Effect<Middleware, never, never> {
-            return super.response_middleware(env);
+            return super.middleware(env).pipe(
+                Effect.map(middleware => guard_at_target(middleware))
+            );
         }
     }
 

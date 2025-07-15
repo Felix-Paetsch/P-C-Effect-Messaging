@@ -40,9 +40,22 @@ export function runEffectAsPromiseFlash<T, E extends Error>(e: Effect.Effect<T, 
     ));
 }
 
-export function resultToEffect<T, E extends Error>(r: Result<T, E>): Effect.Effect<T, E> {
+function syncResultToEffect<T, E extends Error>(r: Result<T, E>): Effect.Effect<T, E> {
     if (r.is_error) return Effect.fail(r.error);
     return Effect.succeed(r.result);
+}
+
+export function resultToEffect<T, E extends Error>(r: Promise<Result<T, E>> | Result<T, E>): Effect.Effect<T, E | CallbackError> {
+    if (r instanceof Promise) {
+        return Effect.tryPromise({
+            try: () => r,
+            catch: (e) => new CallbackError({ error: e })
+        }).pipe(
+            Effect.andThen(res => syncResultToEffect(res as Result<T, E>)),
+        )
+    }
+
+    return syncResultToEffect(r);
 }
 
 export class CallbackError extends Data.TaggedError("CallbackError")<{

@@ -90,6 +90,7 @@ export abstract class Protocol<SenderResult, ReceiverResult> {
 
     /** The middleware to register on both sides to make this work */
     middleware(env: Environment): Effect.Effect<Middleware, never, never> {
+        console.log("REGISTER MIDDLEWARE", this.protocol_name, env.ownAddress._secondary_id);
         return Effect.gen(this, function* () {
             const on_first_request = this.on_first_request.pipe(
                 Effect.provide(

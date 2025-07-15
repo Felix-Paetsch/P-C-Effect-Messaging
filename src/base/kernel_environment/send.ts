@@ -1,13 +1,13 @@
 import { Data, Effect, Equal, pipe } from "effect";
-import { MessageT, SerializedMessageT } from "../message";
 import { Address, AddressT } from "../address";
-import { applyListeners } from "./listen";
 import { applyMiddlewareEffect } from "../apply_middleware_effect";
-import { MiddlewareInterrupt } from "../middleware";
 import { sendThroughCommunicationChannel } from "../communication_channel";
-import { LocalComputedMessageDataT, localComputedMessageDataWithUpdates, sendLocalComputedMessageData } from "../local_computed_message_data";
 import { findEndpointOrFail } from "../endpoints";
 import { InvalidMessageFormatError, MessageTransmissionError } from "../errors/message_errors";
+import { LocalComputedMessageDataT, localComputedMessageDataWithUpdates, sendLocalComputedMessageData } from "../local_computed_message_data";
+import { MessageT, SerializedMessageT } from "../message";
+import { MiddlewareInterrupt } from "../middleware";
+import { applyListeners } from "./listen";
 
 export class AddressNotFoundError extends Data.TaggedError("AddressNotFoundError")<{
     address: Address;
@@ -15,7 +15,7 @@ export class AddressNotFoundError extends Data.TaggedError("AddressNotFoundError
 
 export const kernel_send: Effect.Effect<void, MessageTransmissionError | InvalidMessageFormatError, MessageT> = Effect.gen(function* () {
     const message = yield* MessageT;
-    console.log("< MSG >");
+    console.log("< MSG >", message);
     const address = message.target;
 
     const endpoint = yield* findEndpointOrFail(address);

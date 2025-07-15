@@ -1,11 +1,11 @@
-import { Context, Data, Effect, Fiber, Option } from "effect";
-import { MessageT, TransmittableMessageT } from "./message";
-import { MessageTransmissionError } from "./errors/message_errors";
-import { Address, AddressT } from "./address";
-import { Middleware, MiddlewareConfT, useMiddleware } from "./middleware";
+import { Context, Data, Effect, Option } from "effect";
+import { Address, AddressT, LocalAddress } from "./address";
 import { AddressAlreadyInUseError, CommunicationChannel, CommunicationChannelT, MessageChannelTransmissionError, registerCommunicationChannel } from "./communication_channel";
-import { LocalComputedMessageDataT } from "./local_computed_message_data";
+import { MessageTransmissionError } from "./errors/message_errors";
 import { AddressNotFoundError } from "./kernel_environment/send";
+import { LocalComputedMessageDataT } from "./local_computed_message_data";
+import { MessageT, TransmittableMessageT } from "./message";
+import { Middleware, MiddlewareConfT, useMiddleware } from "./middleware";
 
 /** 
  * Allows to interact with the messaging system via a designated node for message sending and receiving 
@@ -33,7 +33,7 @@ export class EnvironmentInactiveError extends Data.TaggedError("EnvironmentInact
  * @returns Effect that creates an Environment
  */
 export const createLocalEnvironment = (
-    ownAddress: Address,
+    ownAddress: LocalAddress,
     onMessageForOutsideWorld: Effect.Effect<void, never, MessageT> = Effect.void
 ): Effect.Effect<Environment, AddressAlreadyInUseError, never> => Effect.gen(function* (_) {
     let _onMessageForKernelRecieved: Effect.Effect<void, AddressNotFoundError | MessageChannelTransmissionError, TransmittableMessageT> = Effect.void;
