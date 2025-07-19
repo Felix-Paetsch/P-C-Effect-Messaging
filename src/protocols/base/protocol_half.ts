@@ -1,8 +1,6 @@
 import { Effect } from "effect";
 import { Address } from "../../base/address";
-import { Environment, EnvironmentT } from "../../base/environment";
-import { Middleware } from "../../base/middleware";
-import { guard_at_source, guard_at_target } from "../../middleware/guard";
+import { EnvironmentT } from "../../base/environment";
 import { Json } from "../../utils/json";
 import { Protocol } from "../protocol";
 import { ProtocolCommunicationHandlerT } from "./communicationHandler";
@@ -29,12 +27,6 @@ export function ProtocolRequestHalf<S>(
         run(address: Address, data: Json): Effect.Effect<S, ProtocolError, EnvironmentT> {
             return _run.bind(this)(address, data);
         }
-
-        middleware(env: Environment): Effect.Effect<Middleware, never, never> {
-            return super.middleware(env).pipe(
-                Effect.map(middleware => guard_at_source(middleware))
-            );
-        }
     }
 
     return new ProtocolRequestHalf(ident.protocol_name, ident.protocol_ident, ident.protocol_version);
@@ -55,12 +47,6 @@ export function ProtocolResponseHalf<S>(ident: {
                 message: "Not implemented",
                 data
             }));
-        }
-
-        middleware(env: Environment): Effect.Effect<Middleware, never, never> {
-            return super.middleware(env).pipe(
-                Effect.map(middleware => guard_at_target(middleware))
-            );
         }
     }
 

@@ -16,5 +16,6 @@ export const KernelEnv = {
             address: Address.local_address
         }),
         Effect.orDie
-    )
+    ),
+    is_active: () => true
 } satisfies Environment;

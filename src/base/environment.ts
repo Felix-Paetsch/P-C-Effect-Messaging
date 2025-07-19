@@ -18,7 +18,8 @@ export type Environment = {
     /** Remove the environment from the system */
     remove: Effect.Effect<void, never, never>,
     /** Use a middleware on the environment address */
-    useMiddleware: (middleware: Middleware) => Effect.Effect<void, EnvironmentInactiveError, never>
+    useMiddleware: (middleware: Middleware) => Effect.Effect<void, never, never>,
+    is_active: () => boolean
 }
 
 export class EnvironmentT extends Context.Tag("EnvironmentT")<EnvironmentT, Environment>() { }
@@ -89,23 +90,18 @@ export const createLocalEnvironment = (
         remove: remove_effect.pipe(Effect.andThen(() => {
             active = false;
         })),
-        useMiddleware: (middleware: Middleware) => guard_is_active.pipe(
-            Effect.andThen(() => useMiddleware.pipe(
-                Effect.provideService(MiddlewareConfT, {
-                    middleware: middleware,
-                    address: ownAddress
-                })
-            )),
-            Effect.orElse(() => remove_effect.pipe(
-                Effect.andThen(
-                    () => Effect.fail(new EnvironmentInactiveError({ address: ownAddress }))
-                )
-            ))
-        )
+        useMiddleware: (middleware: Middleware) => useMiddleware.pipe(
+            Effect.provideService(MiddlewareConfT, {
+                middleware: middleware,
+                address: ownAddress
+            }),
+            Effect.ignore
+        ),
+        is_active: () => active
     }
 
-    yield* res.useMiddleware(at_target_middleware).pipe(Effect.orDie);
-    yield* res.useMiddleware(at_source_middleware).pipe(Effect.orDie);
+    yield* res.useMiddleware(at_target_middleware);
+    yield* res.useMiddleware(at_source_middleware);
     return res;
 });
 

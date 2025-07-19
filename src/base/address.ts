@@ -2,7 +2,7 @@ import { Context, Data, Effect, Equal, Hash, ParseResult, Schema } from "effect"
 import { v4 as uuidv4 } from 'uuid';
 
 export class AddressDeserializationError extends Data.TaggedError("AddressDeserializationError")<{
-    address: string;
+    address: unknown;
 }> { }
 export class AddressT extends Context.Tag("AddressT")<AddressT, Address>() { }
 
@@ -56,7 +56,7 @@ export class Address implements Equal.Equal {
             )
     }
 
-    static deserializeFromUnkown(serialized: any): Effect.Effect<Address, AddressDeserializationError> {
+    static deserializeFromUnkown(serialized: unknown): Effect.Effect<Address, AddressDeserializationError> {
         return Schema.decodeUnknown(Address.AddressFromString)(serialized)
             .pipe(
                 Effect.catchTag("ParseError", () => new AddressDeserializationError({ address: serialized }))

@@ -1,5 +1,5 @@
-import { Middleware, MiddlewareContinue, MiddlewareInterrupt } from "../base/middleware"
-import { Effect } from "effect"
+import { Effect } from "effect";
+import { Middleware, MiddlewareContinue, MiddlewareInterrupt } from "../base/middleware";
 
 export function harpoon_middleware(arr: Middleware[]): Array<Middleware> & (() => Middleware);
 export function harpoon_middleware(...arr: Middleware[]): Array<Middleware> & (() => Middleware);
@@ -22,6 +22,13 @@ export function harpoon_middleware(...args: any[]): Array<Middleware> & (() => M
                 return (arr as any)[prop];
             }
             return Reflect.get(target, prop, receiver);
+        },
+        set(target, prop, value, receiver) {
+            if (prop in arr) {
+                (arr as any)[prop] = value;
+                return true;
+            }
+            return Reflect.set(target, prop, value, receiver);
         },
         has(target, prop) {
             return prop in arr || Reflect.has(target, prop);
@@ -59,6 +66,13 @@ export function non_interrupt_harpoon_middleware(...args: any[]): Array<Middlewa
                 return (arr as any)[prop];
             }
             return Reflect.get(target, prop, receiver);
+        },
+        set(target, prop, value, receiver) {
+            if (prop in arr) {
+                (arr as any)[prop] = value;
+                return true;
+            }
+            return Reflect.set(target, prop, value, receiver);
         },
         has(target, prop) {
             return prop in arr || Reflect.has(target, prop);

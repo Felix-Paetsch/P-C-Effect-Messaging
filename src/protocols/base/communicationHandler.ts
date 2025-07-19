@@ -1,4 +1,5 @@
 import { Context, Effect, Layer, pipe } from "effect";
+import { Address } from "../../base/address";
 import { EnvironmentInactiveError } from "../../base/environment";
 import { MessageTransmissionError } from "../../base/errors/message_errors";
 import { Json } from "../../utils/json";
@@ -8,9 +9,15 @@ import { ProtocolMessage, ProtocolMessageT } from "./protocol_message";
 export class ProtocolCommunicationHandlerT extends Context.Tag("ProtocolCommunicationHandlerT")<ProtocolCommunicationHandlerT, ProtocolCommunicationHandler>() { }
 
 export class ProtocolCommunicationHandler {
+    readonly communication_target: Address;
     constructor(
         public __current_pm: ProtocolMessage
-    ) { }
+    ) {
+        this.communication_target = Address.deserializeFromUnkown((this.__current_pm.meta_data.chain_message as any)?.current_sender || null).pipe(
+            Effect.orDie,
+            Effect.runSync
+        );
+    }
 
     respond(data: Json, timeout?: number) {
         return this.__current_pm.respond(data, timeout);

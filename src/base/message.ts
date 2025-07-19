@@ -1,6 +1,6 @@
 import { Context, Data, Effect, ParseResult, pipe, Schema } from "effect";
-import { Address } from "./address";
 import { Json } from "../utils/json";
+import { Address } from "./address";
 
 export class MessageT extends Context.Tag("MessageT")<
     MessageT,
@@ -30,7 +30,7 @@ export class Message {
 
     constructor(
         public target: Address,
-        content: string | { [key: string]: Json },
+        content: string | { [key: string]: Json }, // Is string, we assume it is serialized { key: Json }
         public meta_data: { [key: string]: Json } = {}
     ) {
         if (typeof content === "string") {
@@ -40,12 +40,8 @@ export class Message {
         }
     }
 
-    serialize(): Effect.Effect<SerializedMessage, MessageSerializationError> {
-        return Schema.encode(Message.MessageFromString)(this)
-            .pipe(
-                Effect.map(serialized => serialized as SerializedMessage),
-                Effect.mapError(() => new MessageSerializationError({ message: this }))
-            )
+    serialize(): SerializedMessage {
+        return Schema.encodeSync(Message.MessageFromString)(this) as SerializedMessage;
     }
 
     static deserialize(serialized: SerializedMessage): Effect.Effect<Message, MessageDeserializationError> {
@@ -55,21 +51,20 @@ export class Message {
             )
     }
 
-    get serialized_content(): Effect.Effect<string, MessageSerializationError> {
+    get serialized_content(): Effect.Effect<string> {
         const this_msg = this;
         return Effect.gen(function* () {
             if (this_msg.msg_content.serialized === null) {
                 if (this_msg.msg_content.deserialized === null) {
-                    return yield* new MessageSerializationError({ message: this_msg });
+                    return yield* Effect.die("Both serialized and deserialized are null");
                 }
 
-                const serialized = yield* Schema.encode(transform_message_content)(this_msg.msg_content.deserialized);
+                const serialized = Schema.encodeSync(transform_message_content)(this_msg.msg_content.deserialized);
                 this_msg.msg_content.serialized = serialized;
             }
 
             return this_msg.msg_content.serialized!;
-        }).pipe(Effect.catchTag("ParseError", () => new MessageSerializationError({ message: this })));
-
+        });
     }
 
     get content(): Effect.Effect<{ [key: string]: Json }, MessageDeserializationError> {
@@ -132,21 +127,16 @@ export class Message {
                         new ParseResult.Type(ast, str, `Failed deserializing message: ${e instanceof Error ? e.message : String(e)}`));
                 })
             ),
-        encode: (msg: Message, _, ast) =>
+        encode: (msg: Message) =>
             pipe(
                 msg.serialized_content,
                 Effect.andThen(serialized_content =>
-                    Effect.try(() => JSON.stringify({
+                    JSON.stringify({
                         target: Schema.encodeSync(Address.AddressFromString)(msg.target),
                         content: serialized_content,
                         meta_data: msg.meta_data
-                    }))
-                ),
-                Effect.catchAll(e => {
-                    return ParseResult.fail(
-                        new ParseResult.Type(ast, "", `Failed serializing message: ${e instanceof Error ? e.message : String(e)}`)
-                    );
-                })
+                    })
+                )
             )
     });
 
@@ -181,15 +171,12 @@ export class TransmittableMessage {
         })
     }
 
-    get string(): Effect.Effect<SerializedMessage, MessageSerializationError> {
-        const self = this;
-        return Effect.gen(function* () {
-            if (self.msg instanceof Message) {
-                return yield* self.msg.serialize();
-            }
+    get string() {
+        if (this.msg instanceof Message) {
+            return this.msg.serialize();
+        }
 
-            return self.msg;
-        })
+        return this.msg;
     }
 
     get address(): Effect.Effect<Address, MessageDeserializationError> {

@@ -15,11 +15,11 @@ export class AddressNotFoundError extends Data.TaggedError("AddressNotFoundError
 
 export const kernel_send: Effect.Effect<void, MessageTransmissionError | InvalidMessageFormatError, MessageT> = Effect.gen(function* () {
     const message = yield* MessageT;
-    console.log("< MSG >", message);
     const address = message.target;
 
+    console.log("SENDING MSG", message);
     const endpoint = yield* findEndpointOrFail(address);
-    const serialized_message = yield* message.serialize();
+    const serialized_message = message.serialize();
 
     // Incomming to kernel
     const interrupt = yield* applyMiddlewareEffect.pipe(
@@ -82,18 +82,6 @@ export const kernel_send: Effect.Effect<void, MessageTransmissionError | Invalid
         Effect.gen(function* () {
             const message = yield* MessageT;
             return message.target;
-        })
-    ),
-    Effect.catchTag("MessageSerializationError", (e) =>
-        Effect.gen(function* () {
-            const message = yield* MessageT;
-            return Effect.fail(
-                new InvalidMessageFormatError({
-                    Message: message,
-                    error: e,
-                    message: "The message to send had bad format."
-                })
-            );
         })
     )
 );

@@ -17,24 +17,11 @@ type PartitionMiddlewareGen<Keys extends string> = (() => Middleware) & {
     [K in Keys]: Middleware[]
 }
 
-/*
-Call like:   
-
-    const res = partition_middleware([
-        "ping",
-        ["pong", empty_middleware],
-        ["test", [empty_middleware, empty_middleware]]
-    ] as const);
-
-for good auto-complete
-*/
-
 export function partition_middleware<
     T extends readonly (string | [string, Middleware] | [string, Middleware[]])[]
 >(
     partitions: T
 ): PartitionMiddlewareGen<ExtractPartitionKeys<T>> {
-    const partition_arr: Middleware[] = [];
     const partitionMap: { [key: string]: ReturnType<typeof harpoon_middleware> } = {};
 
     for (const partition of partitions) {
@@ -57,11 +44,12 @@ export function partition_middleware<
         }
 
         partitionMap[key] = currentHarpoonMiddleware;
-        partition_arr.push(currentHarpoonMiddleware());
     }
 
     const mainMiddleware = (): Middleware => {
-        return collection_middleware(partition_arr);
+        return collection_middleware(
+            ...Object.values(partitionMap).map(m => m())
+        );
     };
 
     return new Proxy(mainMiddleware, {
@@ -70,6 +58,13 @@ export function partition_middleware<
                 return partitionMap[prop as keyof typeof partitionMap];
             }
             return Reflect.get(target, prop, receiver);
+        },
+        set(target, prop, value, receiver) {
+            if (prop in mainMiddleware) {
+                (mainMiddleware as any)[prop] = value;
+                return true;
+            }
+            return Reflect.set(target, prop, value, receiver);
         },
         has(target, prop) {
             return (typeof prop === 'string' && prop in partitionMap) || Reflect.has(target, prop);
@@ -89,3 +84,6 @@ export function partition_middleware<
         }
     }) as PartitionMiddlewareGen<ExtractPartitionKeys<T>>;
 }
+
+export type PartitionMiddlewareKeys<T> =
+    T extends PartitionMiddlewareGen<infer K> ? K : never;

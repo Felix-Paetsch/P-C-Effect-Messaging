@@ -1,10 +1,11 @@
+import chalk from "chalk";
 import { Data, Effect, Layer, Option, Schema } from "effect";
 import { Address } from "../base/address";
 import { Environment, EnvironmentInactiveError, EnvironmentT } from "../base/environment";
 import { MessageTransmissionError } from "../base/errors/message_errors";
 import { Message, MessageT } from "../base/message";
 import { Middleware } from "../base/middleware";
-import { guard_at_source, guard_at_target } from "../middleware/guard";
+import { guard_middleware } from "../middleware/guard";
 import { chain_middleware, make_message_chain } from "../middleware/message_chains";
 import { Json } from "../utils/json";
 import { ProtocolCommunicationHandler, ProtocolCommunicationHandlerT } from "./base/communicationHandler";
@@ -83,14 +84,14 @@ export abstract class Protocol<SenderResult, ReceiverResult> {
     abstract run(address: Address, data: Json): Effect.Effect<SenderResult, ProtocolError, EnvironmentT>;
 
     on(cb: (result: ReceiverResult) => Effect.Effect<void, never, never>): void {
-        this.on_callback = cb;
+        this._on_callback = cb;
     }
-    protected on_callback: (result: ReceiverResult) => Effect.Effect<void, never, never> = () => Effect.void;
+    _on_callback: (result: ReceiverResult) => Effect.Effect<void, never, never> = () => Effect.void;
 
 
     /** The middleware to register on both sides to make this work */
     middleware(env: Environment): Effect.Effect<Middleware, never, never> {
-        console.log("REGISTER MIDDLEWARE", this.protocol_name, env.ownAddress._secondary_id);
+        console.log(chalk.gray("REGISTER MIDDLEWARE", this.protocol_name, env.ownAddress._secondary_id));
         return Effect.gen(this, function* () {
             const on_first_request = this.on_first_request.pipe(
                 Effect.provide(
@@ -125,13 +126,23 @@ export abstract class Protocol<SenderResult, ReceiverResult> {
 
     request_middleware(env: Environment): Effect.Effect<Middleware, never, never> {
         return this.middleware(env).pipe(
-            Effect.map(middleware => guard_at_source(middleware))
+            Effect.map(middleware => guard_middleware(middleware, Effect.gen(function* () {
+                const msg = yield* MessageT;
+                const length = (msg.meta_data.chain_message as any)?.current_msg_chain_length || -1;
+                if (length % 2 == 0) return true;
+                return false;
+            })))
         )
     }
 
     response_middleware(env: Environment): Effect.Effect<Middleware, never, never> {
         return this.middleware(env).pipe(
-            Effect.map(middleware => guard_at_target(middleware))
+            Effect.map(middleware => guard_middleware(middleware, Effect.gen(function* () {
+                const msg = yield* MessageT;
+                const length = (msg.meta_data.chain_message as any)?.current_msg_chain_length || 0;
+                if (length % 2 == 1) return true;
+                return false;
+            })))
         )
     }
 }

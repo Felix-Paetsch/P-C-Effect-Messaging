@@ -1,15 +1,15 @@
-import { Effect, Schema, Data, Context, Deferred, Duration, Schedule, pipe } from "effect";
-import { Message, MessageT } from "../base/message";
-import { Address } from "../base/address";
-import { Middleware, MiddlewareContinue, MiddlewareInterrupt } from "../base/middleware";
+import { Context, Data, Deferred, Duration, Effect, Schedule, Schema, pipe } from "effect";
 import { v4 as uuidv4 } from 'uuid';
-import { LocalComputedMessageDataT } from "../base/local_computed_message_data";
+import { Address } from "../base/address";
 import { EnvironmentInactiveError, EnvironmentT } from "../base/environment";
-import { guard_at_target } from "./guard";
 import { InvalidMessageFormatError, MessageTransmissionError } from "../base/errors/message_errors";
+import { LocalComputedMessageDataT } from "../base/local_computed_message_data";
+import { Message, MessageT } from "../base/message";
+import { Middleware, MiddlewareContinue, MiddlewareInterrupt } from "../base/middleware";
 import { Json } from "../utils/json";
+import { guard_at_target } from "./guard";
 
-const chain_message_schema = Schema.Struct({
+export const chain_message_schema = Schema.Struct({
     current_sender: Address.AddressFromString,
     current_reciever: Address.AddressFromString,
     msg_chain_uid: Schema.String,
@@ -89,8 +89,6 @@ const make_chain_message_promise = (message: Message, chain_uid: string, timeout
             msg_chain_uid: chain_uid
         }))
     );
-
-    const date = new Date();
 
     chain_queue[key] = {
         last_message: message,
