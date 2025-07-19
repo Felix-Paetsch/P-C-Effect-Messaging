@@ -17,7 +17,6 @@ export const kernel_send: Effect.Effect<void, MessageTransmissionError | Invalid
     const message = yield* MessageT;
     const address = message.target;
 
-    console.log("SENDING MSG", message);
     const endpoint = yield* findEndpointOrFail(address);
     const serialized_message = message.serialize();
 

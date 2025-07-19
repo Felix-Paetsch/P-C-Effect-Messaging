@@ -19,7 +19,11 @@ export function harpoon_middleware(...args: any[]): Array<Middleware> & (() => M
     return new Proxy(mwf, {
         get(target, prop, receiver) {
             if (prop in arr) {
-                return (arr as any)[prop];
+                const value = (arr as any)[prop];
+                if (typeof value === 'function') {
+                    return value.bind(arr);
+                }
+                return value;
             }
             return Reflect.get(target, prop, receiver);
         },
@@ -63,7 +67,11 @@ export function non_interrupt_harpoon_middleware(...args: any[]): Array<Middlewa
     return new Proxy(mwf, {
         get(target, prop, receiver) {
             if (prop in arr) {
-                return (arr as any)[prop];
+                const value = (arr as any)[prop];
+                if (typeof value === 'function') {
+                    return value.bind(arr);
+                }
+                return value;
             }
             return Reflect.get(target, prop, receiver);
         },
